@@ -62,7 +62,8 @@ Notes:
 
 - WebP is accepted as an input image format but is not offered as an output (macOS cannot encode it natively).
 - "Audio only" writes M4A (macOS cannot encode MP3 natively).
-- For audio files, Convert offers only M4A, and GIF/MP4 are not shown. - In every Convert, a file that is already in the target format is skipped and listed as skipped in the menu.
+- For audio files, Convert offers only M4A, and GIF/MP4 are not shown.
+- In every Convert, a file that is already in the target format is skipped and listed as skipped in the menu.
 - Combine is dimmed when a single PDF is selected. A single image can still be combined into a one-page PDF.
 - Markdown always writes one .md per input file.
 - Transcription uses the language chosen in settings (default: the system language). If the on-device model for that language is not installed, the job reports this in the menu and offers to download it.
