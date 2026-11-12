@@ -25,12 +25,28 @@ Guiding rule: the app must streamline work, not add clutter. Every wheel has few
 2. The wheel appears centred on the cursor. Its centre shows a selection summary, for example "3 images".
 3. Moving the cursor into a wedge highlights it.
 4. Releasing the hotkey runs the highlighted action. Releasing in the centre, or pressing Esc, cancels.
-5. If Finder is not frontmost or nothing is selected, the hotkey does nothing.
-6. If the selection contains no supported file type, the wheel appears briefly with a "no actions for this file" note.
+5. The hotkey is registered only while Finder is frontmost, so in every other app the keystroke passes through untouched. In Finder with nothing selected, the hotkey does nothing.
+6. If the selection is unsupported (see "Selection classification"), the wheel appears briefly with a "no actions for this selection" note.
+
+### Selection classification
+
+The selection reader returns exactly one of:
+
+| Classification | Condition |
+|---|---|
+| PDF | Every item is a PDF |
+| Image | Every item is an image (JPG, PNG, HEIC, TIFF, WebP, GIF) |
+| Video | Every item is a video |
+| Audio | Every item is an audio file |
+| Video + audio | Videos and audio files only |
+| PDF + image | PDFs and images only |
+| Unsupported | Anything else: any folder, any other file type, or any other mix |
+
+A single unsupported item makes the whole selection unsupported. Nothing is silently skipped.
 
 ### Wheel layout
 
-Six fixed directions. Four verbs keep their direction on every wheel; the lower-left slot holds a type-specific extra; the bottom slot is unused in the first version. A verb that does not apply to the current type is not shown.
+Six fixed directions. Four verbs keep their direction on every wheel; the lower-left slot holds a type-specific extra; the bottom slot is unused in the first version. The ring is always drawn whole with six wedges: a slot with no action for the current selection is drawn as a dimmed, unlabelled wedge that cannot be targeted (releasing on it cancels).
 
 | Direction | PDF | Image | Video / audio |
 |---|---|---|---|
@@ -44,7 +60,9 @@ Notes:
 
 - WebP is accepted as an input image format but is not offered as an output (macOS cannot encode it natively).
 - "Audio only" writes M4A (macOS cannot encode MP3 natively).
-- For audio files, Convert offers only M4A, and GIF/MP4 are not shown.
+- For audio files, Convert offers only M4A, and GIF/MP4 are not shown. A file that is already M4A is skipped and listed as skipped in the menu.
+- Markdown always writes one .md per input file.
+- Transcription uses the language chosen in settings (default: the system language). If the on-device model for that language is not installed, the job reports this in the menu and offers to download it.
 - Native PDF compression works by downsampling and recompressing embedded images. It is effective on scanned and image-heavy PDFs and has little effect on text-only PDFs. This is an accepted limitation.
 
 ### Sub-options
@@ -52,9 +70,27 @@ Notes:
 - Releasing on a verb runs it with the last-used option for that file type. On first use, defaults apply: Convert image to JPG, Convert PDF to PNG, Convert video to MP4, Compress medium.
 - Continuing to move outward past the wedge opens an outer ring with the alternatives; releasing on one runs it and stores it as the new last-used option.
 
+Starting values for presets (to be tuned during the build, not user-configurable in the first version):
+
+| Preset | Value |
+|---|---|
+| Image Compress light / medium / strong | Lossy quality 0.8 / 0.6 / 0.4, same format (PNG is re-encoded as JPG only on strong) |
+| Image Compress "resize" | Fourth outer-ring option: longest side 2000 px, medium quality |
+| PDF Compress light / medium / strong | Embedded images downsampled to 200 / 150 / 100 dpi |
+| Video Compress light / medium / strong | 1080p / 720p / 540p H.264 system export presets |
+| PDF to PNG / JPG | 200 dpi |
+| Video to GIF | 480 px wide, 12 frames per second |
+
 ### Mixed selections
 
-Only verbs valid for every selected file are shown. A selection of PDFs and images offers Combine (into one PDF) and Markdown. A selection with no common verb is treated as unsupported.
+Two mixes are supported; each has its own row in the layout table.
+
+| Mix | Verbs shown |
+|---|---|
+| PDF + image | Markdown (Mistral OCR, one .md per file), Compress, Combine (into one PDF). Convert and Extra are dimmed. |
+| Video + audio | Markdown (transcript per file), Compress, Convert with M4A as the only option. |
+
+For Compress on a mix, the outer ring offers light / medium / strong only. Releasing on the verb uses medium; mixes do not read or store last-used options.
 
 ### Reorder strip (Combine only)
 
@@ -63,6 +99,7 @@ After Combine is chosen, a slim panel appears at the cursor with one thumbnail p
 ### Results
 
 - Output is written next to the original with a suffix (for example `report-compressed.pdf`, `scan.md`, `photo.jpg`). Combine output is named after the first file with a `-merged` suffix.
+- Actions that produce many files from one input (PDF Split, PDF to PNG / JPG) write them into a new folder next to the original, named after it (for example `report-pages/report-p01.pdf`).
 - If the name already exists, a number is appended. Nothing is ever overwritten.
 - When a job finishes, its outputs are selected in Finder.
 - Image Convert and Compress strip location metadata by default; a settings toggle disables this.
@@ -78,7 +115,7 @@ After Combine is chosen, a slim panel appears at the cursor with one thumbnail p
 
 ### Settings
 
-One small window opened from the menu bar icon: hotkey, Mistral API key (stored in the Keychain), metadata-stripping toggle.
+One small window opened from the menu bar icon: hotkey, Mistral API key (stored in the Keychain), transcription language, metadata-stripping toggle.
 
 ### Visual design
 
@@ -94,7 +131,7 @@ One menu bar app (no Dock icon) with five units.
 | Unit | Responsibility | Depends on |
 |---|---|---|
 | Trigger | Registers the global hotkey; reports key down and key up; samples cursor position while held | System hotkey API |
-| Selection reader | Reads the Finder selection; classifies it as PDF, image, video/audio, mixed or unsupported | Finder automation (Apple Events) |
+| Selection reader | Reads the Finder selection; returns one of the seven classifications in "Selection classification" | Finder automation (Apple Events) |
 | Wheel | Transparent floating panel that draws the wheel; pure geometry function maps cursor offset to wedge and ring; returns the chosen action and option | SwiftUI, layout table |
 | Actions | One independent unit per action with a common interface: input files plus options in, output files or error out, progress reported along the way | PDFKit, ImageIO, Vision, AVFoundation, Speech, Mistral API |
 | Job centre | Runs actions in the background; tracks progress and results; drives the menu bar icon; reveals outputs in Finder; handles cancel and cleanup | Swift concurrency |
@@ -113,7 +150,7 @@ Supporting pieces: the layout table (file type to verbs to sub-options, the sing
 ### Permissions
 
 - Automation permission for Finder is required.
-- The hold-hotkey is expected to work without Accessibility permission (system hotkey API for down/up, cursor position polling). This must be verified in the first build step; if it does not hold, Accessibility permission is requested with an explanation.
+- The hold-hotkey is expected to work without Accessibility permission (system hotkey API for down/up, cursor position polling). The same check covers catching Esc while the hotkey is held and registering the hotkey only while Finder is frontmost. This must be verified in the first build step; if it does not hold, Accessibility permission is requested with an explanation.
 
 ## Testing
 
