@@ -35,14 +35,16 @@ The selection reader returns exactly one of:
 | Classification | Condition |
 |---|---|
 | PDF | Every item is a PDF |
-| Image | Every item is an image (JPG, PNG, HEIC, TIFF, WebP, GIF) |
+| Image | Every item is an image (JPG, PNG, HEIC, TIFF, WebP). GIF files are unsupported as input |
 | Video | Every item is a video |
 | Audio | Every item is an audio file |
 | Video + audio | Videos and audio files only |
 | PDF + image | PDFs and images only |
 | Unsupported | Anything else: any folder, any other file type, or any other mix |
 
-A single unsupported item makes the whole selection unsupported. Nothing is silently skipped.
+A single unsupported item makes the whole selection unsupported. Nothing is silently skipped. Types are decided by the system's uniform type identifiers (conformance to PDF, image, movie, audio), not by file extension.
+
+The "no actions" note is shown for as long as the hotkey is held. In Finder with nothing selected, the keystroke is consumed and nothing is shown.
 
 ### Wheel layout
 
@@ -60,7 +62,8 @@ Notes:
 
 - WebP is accepted as an input image format but is not offered as an output (macOS cannot encode it natively).
 - "Audio only" writes M4A (macOS cannot encode MP3 natively).
-- For audio files, Convert offers only M4A, and GIF/MP4 are not shown. A file that is already M4A is skipped and listed as skipped in the menu.
+- For audio files, Convert offers only M4A, and GIF/MP4 are not shown. - In every Convert, a file that is already in the target format is skipped and listed as skipped in the menu.
+- Combine is dimmed when a single PDF is selected. A single image can still be combined into a one-page PDF.
 - Markdown always writes one .md per input file.
 - Transcription uses the language chosen in settings (default: the system language). If the on-device model for that language is not installed, the job reports this in the menu and offers to download it.
 - Native PDF compression works by downsampling and recompressing embedded images. It is effective on scanned and image-heavy PDFs and has little effect on text-only PDFs. This is an accepted limitation.
@@ -74,7 +77,8 @@ Starting values for presets (to be tuned during the build, not user-configurable
 
 | Preset | Value |
 |---|---|
-| Image Compress light / medium / strong | Lossy quality 0.8 / 0.6 / 0.4, same format (PNG is re-encoded as JPG only on strong) |
+| Image Compress light / medium / strong | Lossy quality 0.8 / 0.6 / 0.4. JPG and HEIC inputs keep their format. PNG, TIFF and WebP inputs are written as JPG, with any transparency flattened onto white |
+| Audio Compress light / medium / strong | Re-encoded as M4A (AAC) at 192 / 128 / 96 kbps, whatever the input format |
 | Image Compress "resize" | Fourth outer-ring option: longest side 2000 px, medium quality |
 | PDF Compress light / medium / strong | Embedded images downsampled to 200 / 150 / 100 dpi |
 | Video Compress light / medium / strong | 1080p / 720p / 540p H.264 system export presets |
@@ -83,7 +87,7 @@ Starting values for presets (to be tuned during the build, not user-configurable
 
 ### Mixed selections
 
-Two mixes are supported; each has its own row in the layout table.
+Two mixes are supported; each is its own entry in the layout-table data structure. In a video + audio mix, Compress applies the video preset to videos and the audio preset to audio files.
 
 | Mix | Verbs shown |
 |---|---|
@@ -101,7 +105,7 @@ After Combine is chosen, a slim panel appears at the cursor with one thumbnail p
 - Output is written next to the original with a suffix (for example `report-compressed.pdf`, `scan.md`, `photo.jpg`). Combine output is named after the first file with a `-merged` suffix.
 - Actions that produce many files from one input (PDF Split, PDF to PNG / JPG) write them into a new folder next to the original, named after it (for example `report-pages/report-p01.pdf`).
 - If the name already exists, a number is appended. Nothing is ever overwritten.
-- When a job finishes, its outputs are selected in Finder.
+- When a job finishes, its outputs are selected in Finder. For folder outputs, the folder is selected.
 - Image Convert and Compress strip location metadata by default; a settings toggle disables this.
 
 ### Progress and errors
@@ -166,7 +170,7 @@ Manual checklist: gesture feel with mouse and trackpad, glass appearance in ligh
 
 ## Build order
 
-1. Trigger, selection reader, wheel, and one action (image Convert) end to end. Verify the permission assumption.
+1. Trigger, selection reader, wheel, job centre with the menu bar icon, and one action (image Convert) end to end. Verify the permission assumption.
 2. Remaining PDF and image actions, reorder strip.
 3. Mistral OCR and settings.
 4. Video and audio actions, transcription.
