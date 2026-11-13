@@ -6,6 +6,7 @@ struct SettingsView: View {
     /// Edited locally and stored on Save or Return, so the Keychain is not written on every keystroke.
     @State private var keyDraft = ""
     @State private var locales: [Locale] = []
+    @State private var localesLoaded = false
     @State private var modelInstalled: Bool?
     @State private var isDownloading = false
     @State private var downloadError: String?
@@ -44,31 +45,38 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             Section("Transcription") {
-                Picker("Language", selection: $settings.transcriptionLocaleID) {
-                    ForEach(locales, id: \.identifier) { locale in
-                        Text(SpeechModels.displayName(for: locale)).tag(locale.identifier)
+                if localesLoaded && locales.isEmpty {
+                    Text("On-device transcription is not available on this Mac.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker("Language", selection: $settings.transcriptionLocaleID) {
+                        ForEach(locales, id: \.identifier) { locale in
+                            Text(SpeechModels.displayName(for: locale)).tag(locale.identifier)
+                        }
                     }
-                }
-                HStack {
-                    if isDownloading {
-                        ProgressView().controlSize(.small)
-                        Text("Downloading speech model…")
-                    } else if modelInstalled == true {
-                        Label("Speech model installed", systemImage: "checkmark.circle")
-                    } else if modelInstalled == false {
-                        Label("Speech model not installed", systemImage: "arrow.down.circle")
-                        Spacer()
-                        Button("Download") { download() }
+                    .disabled(isDownloading)
+                    HStack {
+                        if isDownloading {
+                            ProgressView().controlSize(.small)
+                            Text("Downloading speech model…")
+                        } else if modelInstalled == true {
+                            Label("Speech model installed", systemImage: "checkmark.circle")
+                        } else if modelInstalled == false {
+                            Label("Speech model not installed", systemImage: "arrow.down.circle")
+                            Spacer()
+                            Button("Download") { download() }
+                        }
                     }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                if let downloadError {
-                    Text(downloadError).font(.caption).foregroundStyle(.red)
-                }
-                Text("Used for the Markdown action on video and audio. Transcription runs on this Mac.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    if let downloadError {
+                        Text(downloadError).font(.caption).foregroundStyle(.red)
+                    }
+                    Text("Used for the Markdown action on video and audio. Transcription runs on this Mac.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             Section("Images") {
                 Toggle("Remove location data when converting or compressing", isOn: $settings.stripLocation)
@@ -79,6 +87,7 @@ struct SettingsView: View {
         .fixedSize(horizontal: false, vertical: true)
         .task {
             locales = await SpeechModels.supportedLocales()
+            localesLoaded = true
             // Make sure the stored language is one of the picker's options.
             if let match = await SpeechModels.supported(Locale(identifier: settings.transcriptionLocaleID)) {
                 if settings.transcriptionLocaleID != match.identifier { settings.transcriptionLocaleID = match.identifier }
@@ -104,7 +113,9 @@ struct SettingsView: View {
                 downloadError = error.localizedDescription
             }
             isDownloading = false
-            modelInstalled = await SpeechModels.isInstalled(locale)
+            let installed = await SpeechModels.isInstalled(locale)
+            // Ignore the result if the language changed in the meantime.
+            if settings.transcriptionLocaleID == locale.identifier { modelInstalled = installed }
         }
     }
 }

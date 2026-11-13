@@ -5,7 +5,9 @@ import Speech
 public enum SpeechModels {
     /// Readable language name in the user's language, for example "German (Germany)".
     public static func displayName(for locale: Locale) -> String {
-        Locale.current.localizedString(forIdentifier: locale.identifier) ?? locale.identifier
+        // Identifiers can carry a "@calendar=..." suffix that the name lookup does not understand.
+        let id = locale.identifier.split(separator: "@", maxSplits: 1).first.map(String.init) ?? locale.identifier
+        return Locale.current.localizedString(forIdentifier: id) ?? id
     }
 
     /// All languages the on-device transcriber supports, sorted by display name.
