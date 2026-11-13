@@ -1,4 +1,6 @@
 import Foundation
+import CoreText
+import PDFKit
 import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
@@ -66,5 +68,64 @@ enum Fixtures {
 
     static func fileSize(_ url: URL) -> Int {
         (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? -1
+    }
+
+    /// Pseudo-random pixels. Compresses badly, so size comparisons are meaningful.
+    static func noiseImage(width: Int, height: Int) -> CGImage {
+        var bytes = [UInt8](repeating: 255, count: width * height * 4)
+        var seed: UInt32 = 12345
+        for i in 0..<(width * height) {
+            seed = seed &* 1_664_525 &+ 1_013_904_223
+            bytes[i * 4] = UInt8(truncatingIfNeeded: seed >> 16)
+            bytes[i * 4 + 1] = UInt8(truncatingIfNeeded: seed >> 8)
+            bytes[i * 4 + 2] = UInt8((i % width) * 255 / width)
+        }
+        let provider = CGDataProvider(data: Data(bytes) as CFData)!
+        return CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: width * 4,
+                       space: CGColorSpaceCreateDeviceRGB(),
+                       bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
+                       provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)!
+    }
+
+    /// Writes a noisy image at the given lossy quality.
+    @discardableResult
+    static func writeNoiseImage(to url: URL, type: UTType, width: Int = 1200, height: Int = 800, quality: Double = 1.0) -> URL {
+        let dest = CGImageDestinationCreateWithURL(url as CFURL, type.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(dest, noiseImage(width: width, height: height),
+                                   [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
+        precondition(CGImageDestinationFinalize(dest))
+        return url
+    }
+
+    static func pixelSize(_ url: URL) -> (width: Int, height: Int) {
+        let props = imageProperties(url)
+        return (props[kCGImagePropertyPixelWidth] as? Int ?? 0, props[kCGImagePropertyPixelHeight] as? Int ?? 0)
+    }
+
+    /// Writes an A4 PDF. Page n contains the text "<label> <n>". With `imageHeavy`,
+    /// every page also carries a large noisy image.
+    @discardableResult
+    static func writePDF(to url: URL, pages: Int, label: String = "Page", imageHeavy: Bool = false) -> URL {
+        var box = CGRect(x: 0, y: 0, width: 595, height: 842)
+        let ctx = CGContext(url as CFURL, mediaBox: &box, nil)!
+        let font = CTFontCreateWithName("Helvetica" as CFString, 48, nil)
+        let image = imageHeavy ? noiseImage(width: 1400, height: 1400) : nil
+        for i in 0..<pages {
+            ctx.beginPDFPage(nil)
+            if let image { ctx.draw(image, in: CGRect(x: 0, y: 0, width: 595, height: 595)) }
+            let text = NSAttributedString(string: "\(label) \(i + 1)",
+                                          attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font])
+            ctx.textPosition = CGPoint(x: 72, y: 720)
+            CTLineDraw(CTLineCreateWithAttributedString(text), ctx)
+            ctx.endPDFPage()
+        }
+        ctx.closePDF()
+        return url
+    }
+
+    /// The text of every page of a PDF, trimmed.
+    static func pdfPageTexts(_ url: URL) -> [String] {
+        guard let doc = PDFDocument(url: url) else { return [] }
+        return (0..<doc.pageCount).map { (doc.page(at: $0)?.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
     }
 }
