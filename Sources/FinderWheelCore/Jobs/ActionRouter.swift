@@ -20,6 +20,10 @@ public enum ActionRouter {
             return PDFCompressAction(preset: preset)
         case (.markdown, .pdf), (.markdown, .image):
             return MarkdownOCRAction()
+        case (.convert(.m4a), .audio), (.convert(.m4a), .video):
+            return AudioEncodeAction.convert
+        case (.compress(let preset), .audio):
+            return AudioEncodeAction.compress(preset)
         default:
             return nil
         }
