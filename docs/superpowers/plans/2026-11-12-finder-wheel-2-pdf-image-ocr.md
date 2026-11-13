@@ -1377,8 +1377,14 @@ import Foundation
 @testable import FinderWheelCore
 
 @MainActor
-@Suite struct AppSettingsTests {
-    private func defaults() -> UserDefaults { UserDefaults(suiteName: "AppSettingsTests-\(UUID().uuidString)")! }
+@Suite(.serialized) struct AppSettingsTests {
+    /// One fixed test domain, cleared before each use, so test runs never leave
+    /// new files in ~/Library/Preferences. Same pattern as LastUsedStoreTests.
+    private func defaults() -> UserDefaults {
+        let name = "com.lorenz.finderwheel.tests.settings"
+        UserDefaults().removePersistentDomain(forName: name)
+        return UserDefaults(suiteName: name)!
+    }
 
     @Test func defaultsMatchTheSpec() {
         let settings = AppSettings(defaults: defaults(), secrets: InMemorySecretStore())
