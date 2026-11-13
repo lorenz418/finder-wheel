@@ -30,6 +30,8 @@ public enum ActionRouter {
             return VideoCompressAction(preset: preset)
         case (.convert(.gif), .video):
             return VideoToGIFAction()
+        case (.markdown, .video), (.markdown, .audio):
+            return TranscribeAction()
         default:
             return nil
         }
