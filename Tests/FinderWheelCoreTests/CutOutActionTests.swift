@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import ImageIO
+import CoreGraphics
 import UniformTypeIdentifiers
 @testable import FinderWheelCore
 
@@ -32,5 +33,28 @@ import UniformTypeIdentifiers
     @Test func routerKnowsCutOut() {
         #expect(ActionRouter.action(for: .cutOut, fileKind: .image) is CutOutAction)
         #expect(ActionRouter.action(for: .cutOut, fileKind: .pdf) == nil)
+    }
+
+    @Test func cutsOutARealSubject() async throws {
+        let source = URL(fileURLWithPath: "/Library/User Pictures/Animals/Parrot.heic")
+        guard FileManager.default.fileExists(atPath: source.path) else { return }
+        let tmp = TempFolder()
+        let input = tmp.file("Parrot.heic")
+        try Data(contentsOf: source).write(to: input)  // the system files are symlinks, so copy the bytes
+        let outcome = try await CutOutAction().run(input: input, context: context)
+        let output = tmp.file("Parrot-cutout.png")
+        #expect(outcome == .produced([output]))
+        #expect(Fixtures.imageType(output) == .png)
+        #expect(Fixtures.imageProperties(output)[kCGImagePropertyHasAlpha] as? Bool == true)
+
+        let src = try #require(CGImageSourceCreateWithURL(output as CFURL, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(src, 0, nil))
+        var pixel: [UInt8] = [0, 0, 0, 0]  // start clear, so alpha 0 afterwards means the source pixel was transparent
+        let ctx = try #require(CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                                         space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        // Draw so that the image's top-left pixel (0,0) lands in the single context pixel.
+        ctx.draw(image, in: CGRect(x: 0, y: -(image.height - 1), width: image.width, height: image.height))
+        #expect(pixel[3] == 0)
     }
 }
