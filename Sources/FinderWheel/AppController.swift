@@ -55,6 +55,7 @@ final class AppController {
         // Spec: with nothing selected the keystroke is consumed and nothing is shown.
         guard !inputs.isEmpty else { return }
         let classification = Classifier.classify(inputs.map { Classifier.kind(of: $0) })
+        guard trigger.isHeld else { return }
         wheel.show(inputs: inputs, classification: classification)
         trigger.setEscapeEnabled(true)
     }

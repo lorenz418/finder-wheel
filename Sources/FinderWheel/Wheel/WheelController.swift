@@ -40,17 +40,17 @@ final class WheelController {
         model.entries = entries
         model.isUnsupported = entries.isEmpty
         model.summary = Self.summary(count: inputs.count, classification: classification)
-        model.releaseOptionTitles = Dictionary(uniqueKeysWithValues: entries.filter { $0.options.count > 1 }.map {
+        model.releaseOptionTitles = Dictionary(entries.filter { $0.options.count > 1 }.map {
             ($0.slot, lastUsed.option(for: $0, classification: classification).title)
-        })
+        }, uniquingKeysWith: { first, _ in first })
         model.hit = .none
         model.isVisible = false
 
-        tracker = WheelTracker(optionCounts: Dictionary(uniqueKeysWithValues: entries.map { ($0.slot, $0.options.count) }),
+        tracker = WheelTracker(optionCounts: Dictionary(entries.map { ($0.slot, $0.options.count) }, uniquingKeysWith: { first, _ in first }),
                                metrics: model.metrics)
         origin = NSEvent.mouseLocation
         panel.show(centeredAt: origin)
-        DispatchQueue.main.async { self.model.isVisible = true }
+        DispatchQueue.main.async { [weak self] in self?.model.isVisible = true }
 
         let timer = Timer(timeInterval: 1.0 / 120, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
