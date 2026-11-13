@@ -8,6 +8,8 @@ public enum ActionRouter {
         switch (kind, fileKind) {
         case (.convert(let target), .image) where target.imageType != nil:
             return ImageConvertAction(target: target)
+        case (.compress(let preset), .image):
+            return ImageCompressAction(preset: preset)
         default:
             return nil
         }

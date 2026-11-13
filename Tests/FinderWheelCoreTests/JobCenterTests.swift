@@ -105,10 +105,11 @@ private struct StubAction: FileAction {
         #expect(jobs.hasWarning)
     }
 
-    @Test func routerKnowsImageConvert() {
+    @Test func routerKnowsImageActions() {
         #expect(ActionRouter.action(for: .convert(.jpg), fileKind: .image) is ImageConvertAction)
         #expect(ActionRouter.action(for: .convert(.mp4), fileKind: .image) == nil)
         #expect(ActionRouter.action(for: .convert(.jpg), fileKind: .unsupported) == nil)
+        #expect(ActionRouter.action(for: .compress(.medium), fileKind: .image) is ImageCompressAction)
     }
 
     @Test func cancelDuringLastFileStillFinishesWhenTheFileCompletes() async throws {
