@@ -14,6 +14,7 @@ final class AppController {
     @ObservationIgnored private let trigger = HotkeyTrigger(combo: .optionSpace)
     @ObservationIgnored private let reader = FinderSelectionReader()
     @ObservationIgnored private let wheel = WheelController(lastUsed: LastUsedStore())
+    @ObservationIgnored private let reorder = ReorderPanelController()
 
     init() {
         jobCenter.onFinished = { urls in
@@ -41,6 +42,7 @@ final class AppController {
     }
 
     private func hotkeyPressed() {
+        guard !reorder.isShowing else { return }
         let inputs: [URL]
         do {
             inputs = try reader.read()
@@ -66,7 +68,17 @@ final class AppController {
     }
 
     private func run(_ choice: WheelChoice) {
+        let settings = settingsSnapshot()
+        if choice.option.action == .combine {
+            reorder.show(urls: choice.inputs, near: NSEvent.mouseLocation) { [weak self] ordered in
+                guard let self, let ordered else { return }
+                self.jobCenter.startBatch(title: "Combine", settings: settings) { context in
+                    [try await CombineAction().run(inputs: ordered, context: context)]
+                }
+            }
+            return
+        }
         let title = choice.entry.options.count > 1 ? "\(choice.entry.title): \(choice.option.title)" : choice.entry.title
-        jobCenter.start(title: title, inputs: choice.inputs, kind: choice.option.action, settings: settingsSnapshot())
+        jobCenter.start(title: title, inputs: choice.inputs, kind: choice.option.action, settings: settings)
     }
 }
