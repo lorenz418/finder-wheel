@@ -63,7 +63,7 @@ public final class JobCenter {
         let id = addJob(title: title, total: inputs.count)
         tasks[id] = Task { [weak self] in
             var stoppedEarly = false
-            for input in inputs {
+            for (index, input) in inputs.enumerated() {
                 guard let self else { return }
                 if Task.isCancelled { stoppedEarly = true; break }
                 let name = input.lastPathComponent
@@ -73,7 +73,7 @@ public final class JobCenter {
                     continue
                 }
                 do {
-                    switch try await action.run(input: input, context: self.context(for: id, settings: settings)) {
+                    switch try await action.run(input: input, context: self.context(for: id, fileIndex: index, settings: settings)) {
                     case .produced(let urls): self.update(id) { $0.outputs += urls }
                     case .skipped(let reason): self.addNote(id, file: name, message: reason, isFailure: false)
                     }
@@ -101,7 +101,7 @@ public final class JobCenter {
             guard let self else { return }
             var stoppedEarly = false
             do {
-                let urls = try await operation(self.context(for: id, settings: settings))
+                let urls = try await operation(self.context(for: id, fileIndex: 0, settings: settings))
                 self.update(id) { $0.outputs += urls }
             } catch is CancellationError where Task.isCancelled {
                 stoppedEarly = true
@@ -136,11 +136,22 @@ public final class JobCenter {
         return id
     }
 
-    private func context(for id: UUID, settings: SettingsSnapshot) -> ActionContext {
+    private func context(for id: UUID, fileIndex: Int, settings: SettingsSnapshot) -> ActionContext {
         ActionContext(settings: settings) { [weak self] fraction in
             Task { @MainActor [weak self] in
-                self?.update(id) { $0.currentFraction = max(0, min(1, fraction)) }
+                self?.applyProgress(id, fileIndex: fileIndex, fraction: fraction)
             }
+        }
+    }
+
+    /// Applies a progress report from file `fileIndex`. Reports from a file the job has already
+    /// moved past are dropped, as are changes under 0.01 (except a final 1.0).
+    func applyProgress(_ id: UUID, fileIndex: Int, fraction: Double) {
+        let value = max(0, min(1, fraction))
+        update(id) { job in
+            guard job.done == fileIndex else { return }
+            guard value == 1 || abs(value - job.currentFraction) >= 0.01 else { return }
+            job.currentFraction = value
         }
     }
 

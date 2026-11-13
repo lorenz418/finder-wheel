@@ -188,4 +188,67 @@ private struct StubAction: FileAction {
         #expect(job.notes.isEmpty)
         #expect(!jobs.hasWarning)
     }
+
+    @Test func progressUpdatesAreAppliedAndJobEndsAtOne() async {
+        let jobs = center { url, context in
+            context.progress(0.5)
+            return .produced([url])
+        }
+        let id = jobs.start(title: "Convert", inputs: files, kind: .convert(.jpg), settings: SettingsSnapshot())
+        await jobs.wait(id)
+        let job = jobs.jobs.first { $0.id == id }!
+        #expect(job.done == 3)
+        #expect(job.progress == 1)
+    }
+
+    @Test func lateProgressFromAnEarlierFileDoesNotLeakIntoTheNextOne() async {
+        // The first file reports 0.7 from a detached task 100 ms after it returned.
+        // The second file starts at fraction 0, waits 400 ms, then snapshots the job.
+        final class Box: @unchecked Sendable { var fractionDuringSecondFile: Double? }
+        let box = Box()
+        let holder = HolderBox()
+        let jobs = JobCenter(resolve: { _, _ in
+            StubAction { url, context in
+                if url.lastPathComponent == "a.png" {
+                    let progress = context.progress
+                    Task.detached {
+                        try? await Task.sleep(for: .milliseconds(100))
+                        progress(0.7)
+                    }
+                } else {
+                    try? await Task.sleep(for: .milliseconds(400))
+                    box.fractionDuringSecondFile = await MainActor.run { holder.jobs?.jobs.first?.currentFraction }
+                }
+                return .produced([url])
+            }
+        }, kindOf: { _ in .image })
+        holder.jobs = jobs
+        let id = jobs.start(title: "Convert", inputs: Array(files.prefix(2)), kind: .convert(.jpg), settings: SettingsSnapshot())
+        await jobs.wait(id)
+        #expect(box.fractionDuringSecondFile == 0)
+        #expect(jobs.jobs.first { $0.id == id }!.progress == 1)
+    }
+
+    @Test func progressHelperIgnoresStaleIndexAndTinyChanges() async {
+        let jobs = center { url, _ in
+            try await Task.sleep(for: .seconds(30))
+            return .produced([url])
+        }
+        let id = jobs.start(title: "Convert", inputs: files, kind: .convert(.jpg), settings: SettingsSnapshot())
+        func fraction() -> Double { jobs.jobs.first { $0.id == id }!.currentFraction }
+        jobs.applyProgress(id, fileIndex: 0, fraction: 0.4)
+        #expect(fraction() == 0.4)
+        jobs.applyProgress(id, fileIndex: 0, fraction: 0.405)
+        #expect(fraction() == 0.4)
+        jobs.applyProgress(id, fileIndex: 0, fraction: 0.45)
+        #expect(fraction() == 0.45)
+        jobs.applyProgress(id, fileIndex: 1, fraction: 0.9)
+        #expect(fraction() == 0.45)
+        jobs.applyProgress(id, fileIndex: 0, fraction: 1)
+        #expect(fraction() == 1)
+        jobs.cancel(id)
+        await jobs.wait(id)
+    }
 }
+
+@MainActor private final class HolderBox { var jobs: JobCenter? }
