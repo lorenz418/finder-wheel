@@ -10,6 +10,8 @@ public enum ActionRouter {
             return ImageConvertAction(target: target)
         case (.compress(let preset), .image):
             return ImageCompressAction(preset: preset)
+        case (.cutOut, .image):
+            return CutOutAction()
         default:
             return nil
         }
