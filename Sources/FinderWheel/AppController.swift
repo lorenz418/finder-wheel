@@ -104,7 +104,12 @@ final class AppController {
         alert.informativeText = "Markdown for PDFs and images uploads the selected files to Mistral's OCR service. Every other Finder Wheel action stays on this Mac. This notice is shown once."
         alert.addButton(withTitle: "Continue")
         alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return false }
+        alert.window.level = .modalPanel
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            // Give focus back to Finder so the hotkey works again immediately.
+            NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first?.activate()
+            return false
+        }
         UserDefaults.standard.set(true, forKey: acknowledgedKey)
         return true
     }

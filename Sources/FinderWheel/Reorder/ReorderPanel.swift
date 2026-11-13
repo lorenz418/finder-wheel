@@ -7,6 +7,7 @@ final class ReorderPanelController {
     private var panel: KeyPanel?
     private var completion: (([URL]?) -> Void)?
     private var model: ReorderModel?
+    private var resignObserver: NSObjectProtocol?
 
     var isShowing: Bool { panel != nil }
 
@@ -26,6 +27,7 @@ final class ReorderPanelController {
         panel.level = .floating
         panel.hidesOnDeactivate = false
         panel.isMovableByWindowBackground = false
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.contentView = NSHostingView(rootView: ReorderView(
             model: model,
             confirm: { [weak self] in self?.close(result: model.items.map(\.url)) },
@@ -37,12 +39,19 @@ final class ReorderPanelController {
             origin.y = min(max(origin.y, visible.minY + 8), visible.maxY - size.height - 8)
         }
         panel.setFrameOrigin(origin)
-        panel.makeKeyAndOrderFront(nil)
         self.panel = panel
+        // Losing key (a click into Finder or elsewhere) counts as Cancel.
+        resignObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification, object: panel, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.close(result: nil) }
+        }
+        panel.makeKeyAndOrderFront(nil)
     }
 
     private func close(result: [URL]?) {
         guard let panel else { return }
+        if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
+        resignObserver = nil
         panel.orderOut(nil)
         self.panel = nil
         self.model = nil

@@ -30,6 +30,11 @@ struct SettingsView: View {
                         .disabled(keyDraft == settings.mistralKey)
                 }
                 .onAppear { keyDraft = settings.mistralKey }
+                if settings.mistralKey.isEmpty {
+                    Text("Add a key to use Markdown on PDFs and images.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Text("Used only for the Markdown action on PDFs and images, which sends those files to Mistral. The key is stored in your Keychain.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
