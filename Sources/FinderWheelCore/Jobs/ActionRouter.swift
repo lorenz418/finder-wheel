@@ -12,6 +12,10 @@ public enum ActionRouter {
             return ImageCompressAction(preset: preset)
         case (.cutOut, .image):
             return CutOutAction()
+        case (.convert(let target), .pdf) where target == .png || target == .jpg:
+            return PDFToImagesAction(target: target)
+        case (.splitPDF, .pdf):
+            return PDFSplitAction()
         default:
             return nil
         }
