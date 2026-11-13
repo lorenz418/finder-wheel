@@ -673,7 +673,7 @@ public struct VideoCompressAction: FileAction {
 Run: `swift test --filter "VideoConvertActionTests|VideoCompressActionTests"`
 Expected: PASS, 6 tests.
 
-If `strongPresetShrinksANoisy720pClip` reports a size other than 960x540, the export preset kept a different aspect; assert `size.height <= 540` instead and keep the size comparison.
+If `strongPresetShrinksANoisy720pClip` reports a size other than 960x540, the export preset kept a different aspect; assert `size.height <= 540` instead and keep the size comparison. If it comes back `.skipped`, the fixture was encoded too small: add `AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: 20_000_000]` to the video output settings in `MediaFixtures.writeVideoTrack` rather than weakening the test.
 
 - [ ] **Step 8: Commit**
 
@@ -854,14 +854,16 @@ import Foundation
         ActionContext(settings: SettingsSnapshot(transcriptionLocale: locale), progress: { _ in })
     }
 
-    /// Uses the system voice to create a spoken audio file.
-    private func speak(_ text: String, to url: URL) throws {
+    /// Uses the system's English voice to create a spoken audio file.
+    /// Returns false if the voice is not installed; the caller then skips the test.
+    private func speak(_ text: String, to url: URL) throws -> Bool {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/say")
         process.arguments = ["-v", "Samantha", "-o", url.path, text]
+        process.standardError = FileHandle.nullDevice
         try process.run()
         process.waitUntilExit()
-        #expect(process.terminationStatus == 0)
+        return process.terminationStatus == 0 && FileManager.default.fileExists(atPath: url.path)
     }
 
     @Test func languageNamesAreReadable() {
@@ -877,7 +879,7 @@ import Foundation
     @Test func transcribesSpeechOrReportsMissingModel() async throws {
         let tmp = TempFolder()
         let input = tmp.file("note.aiff")
-        try speak("The quick brown fox jumps over the lazy dog.", to: input)
+        guard try speak("The quick brown fox jumps over the lazy dog.", to: input) else { return }
         if await SpeechModels.isInstalled(english) {
             let outcome = try await TranscribeAction().run(input: input, context: context(english))
             #expect(outcome == .produced([tmp.file("note.md")]))
@@ -1264,7 +1266,7 @@ Run: `swift test && scripts/build-app.sh && open "build/Finder Wheel.app"`
 3. Hold, release, and hold again within a fraction of a second: the wheel appears again and stays visible.
 4. Sliding onto Convert makes the outer ring grow outward from the wedge; sliding to another wedge moves it.
 5. Turn on System Settings, Accessibility, Display, Reduce motion: the wheel only fades. Turn it off again.
-6. Re-run check 16 of the Plan 1 list (fast flick). If outer-ring options are hit by accident, raise `ringOuter` in `WheelMetrics` by 10 and `outerRingOuter` by the same amount, update the radii used in `WheelTrackerTests` if needed, run `swift test`, and re-check.
+6. Re-run check 16 of the Plan 1 list (fast flick). If outer-ring options are hit by accident, raise `ringOuter` in `WheelMetrics` by 10 and `outerRingOuter` by the same amount (the panel size follows automatically), update the radii used in `WheelTrackerTests` if needed, run `swift test`, and re-check.
 
 - [ ] **Step 4: Commit**
 

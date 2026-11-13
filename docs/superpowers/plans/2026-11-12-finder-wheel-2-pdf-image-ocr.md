@@ -883,7 +883,7 @@ git commit -m "Add PDF compress action"
 `CombineAction` is a batch operation, not a `FileAction`: it takes the files in their final order and writes one PDF.
 
 Behaviour:
-- PDFs contribute all their pages; images contribute one page each, sized to the image.
+- PDFs contribute all their pages unchanged. Images contribute one page each, scaled to fit an A4 page (595 x 842 pt) in the image's orientation, so phone photos do not become poster-sized pages. The image keeps its full resolution.
 - Output is `<first file's name>-merged.pdf` next to the first file in the given order.
 - A locked or unreadable PDF, or an unreadable image, fails the whole operation and names the file: "report.pdf: PDF is password-protected".
 - Fewer than one input fails with "Nothing to combine".
@@ -961,8 +961,11 @@ import UniformTypeIdentifiers
         #expect(doc.pageCount == 2)
         let first = doc.page(at: 0)!.bounds(for: .mediaBox)
         let second = doc.page(at: 1)!.bounds(for: .mediaBox)
-        #expect(first.width > first.height)
-        #expect(second.height > second.width)
+        // 400 x 300 fits a landscape A4 page at 793 x 595; 300 x 400 fits portrait at 595 x 793.
+        #expect(abs(first.width - 793.3) < 1)
+        #expect(abs(first.height - 595) < 1)
+        #expect(abs(second.width - 595) < 1)
+        #expect(abs(second.height - 793.3) < 1)
     }
 
     @Test func mixesPDFsAndImages() async throws {
@@ -1070,9 +1073,16 @@ public struct CombineAction: Sendable {
                 merged.insert(page, at: merged.pageCount)
             }
         case .image:
-            guard let image = NSImage(contentsOf: input), let page = PDFPage(image: image) else {
+            guard let image = NSImage(contentsOf: input), image.size.width > 0, image.size.height > 0 else {
                 throw ActionError("Could not read image")
             }
+            // Fit the page to A4 in the image's orientation. Only the page size changes;
+            // the pixels are embedded as they are.
+            let landscape = image.size.width > image.size.height
+            let box = landscape ? CGSize(width: 842, height: 595) : CGSize(width: 595, height: 842)
+            let scale = min(box.width / image.size.width, box.height / image.size.height)
+            image.size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+            guard let page = PDFPage(image: image) else { throw ActionError("Could not read image") }
             merged.insert(page, at: merged.pageCount)
         case .video, .audio, .unsupported:
             throw ActionError("Cannot be combined into a PDF")
@@ -1320,7 +1330,7 @@ Replace `run(_:)` with:
             }
             return
         }
-        let title = choice.entry.options.count > 1 ? "\(choice.entry.title) to \(choice.option.title)" : choice.entry.title
+        let title = choice.entry.options.count > 1 ? "\(choice.entry.title): \(choice.option.title)" : choice.entry.title
         jobCenter.start(title: title, inputs: choice.inputs, kind: choice.option.action, settings: settings)
     }
 ```
@@ -1377,7 +1387,8 @@ import Foundation
         #expect(settings.mistralKey.isEmpty)
         #expect(settings.snapshot().mistralKey == nil)
         #expect(settings.snapshot().stripLocation)
-        #expect(settings.snapshot().transcriptionLocale.identifier == Locale.current.identifier)
+        // The system locale without overrides such as "@rg=dezzzz".
+        #expect(settings.snapshot().transcriptionLocale.identifier == Locale.current.identifier.components(separatedBy: "@")[0])
     }
 
     @Test func valuesPersist() {
@@ -1511,7 +1522,9 @@ public final class AppSettings {
         self.secrets = secrets
         hotkeyID = HotkeyCombo.named(defaults.string(forKey: "hotkeyID")).id
         stripLocation = defaults.object(forKey: "stripLocation") as? Bool ?? true
-        transcriptionLocaleID = defaults.string(forKey: "transcriptionLocaleID") ?? Locale.current.identifier
+        // Drop locale overrides ("en_US@rg=dezzzz") so the default is a plain language and region.
+        transcriptionLocaleID = defaults.string(forKey: "transcriptionLocaleID")
+            ?? Locale.current.identifier.components(separatedBy: "@")[0]
         mistralKey = secrets.get() ?? ""
     }
 
@@ -1540,6 +1553,12 @@ import FinderWheelCore
 
 struct SettingsView: View {
     @Bindable var settings: AppSettings
+    /// Edited locally and stored on Save or Return, so the Keychain is not written on every keystroke.
+    @State private var keyDraft = ""
+
+    private func saveKey() {
+        settings.mistralKey = keyDraft
+    }
 
     var body: some View {
         Form {
@@ -1554,7 +1573,13 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             Section("Mistral OCR") {
-                SecureField("API key", text: $settings.mistralKey)
+                HStack {
+                    SecureField("API key", text: $keyDraft)
+                        .onSubmit(saveKey)
+                    Button("Save", action: saveKey)
+                        .disabled(keyDraft == settings.mistralKey)
+                }
+                .onAppear { keyDraft = settings.mistralKey }
                 Text("Used only for the Markdown action on PDFs and images, which sends those files to Mistral. The key is stored in your Keychain.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -1668,7 +1693,7 @@ Run: `swift test && scripts/build-app.sh && open "build/Finder Wheel.app"`
 
 1. Menu bar icon, then "Settings…": the window opens in front.
 2. Change the hotkey to ⌃ Space: ⌥Space no longer shows the wheel in Finder, ⌃Space does. The hint in the menu shows the new hotkey. Change it back.
-3. Type a test value into the API key field, quit and relaunch the app, reopen settings: the field is filled. (After a rebuild macOS may ask for the login password to read the Keychain item; this is a consequence of ad-hoc signing.)
+3. Type a test value into the API key field and click Save (the button then turns grey). Quit and relaunch the app, reopen settings: the field is filled. (After a rebuild macOS may ask for the login password at launch to read the Keychain item; this is a consequence of ad-hoc signing.)
 4. Turn off "Remove location data", convert a location-tagged photo: the result still has its GPS data. Turn it back on.
 
 - [ ] **Step 11: Commit**
@@ -1744,7 +1769,8 @@ import Foundation
     }
 
     @Test func parsesPagesInIndexOrder() throws {
-        let body = #"{"pages":[{"index":1,"markdown":"second"},{"index":0,"markdown":"# first"}]}"#
+        // Two pound signs: the JSON contains `"#`, which would end a single-pound raw string.
+        let body = ##"{"pages":[{"index":1,"markdown":"second"},{"index":0,"markdown":"# first"}]}"##
         #expect(try MistralClient.parse(data: Data(body.utf8), status: 200) == "# first\n\nsecond\n")
     }
 
@@ -1786,7 +1812,7 @@ private final class TransportSpy: @unchecked Sendable {
     let status: Int
     let body: String
 
-    init(status: Int = 200, body: String = #"{"pages":[{"index":0,"markdown":"# Hello"}]}"#) {
+    init(status: Int = 200, body: String = ##"{"pages":[{"index":0,"markdown":"# Hello"}]}"##) {
         self.status = status
         self.body = body
     }
@@ -2093,7 +2119,7 @@ Prepare: a scanned or image-heavy PDF of several pages, a text-only PDF, a passw
 7. PDF Compress, strong on the scanned PDF: clearly smaller, still readable. On the text-only PDF: the menu lists "Already as small as it gets" and no file appears.
 8. Any PDF action on the password-protected PDF: the menu lists "PDF is password-protected" and the menu bar icon shows the warning dot until the menu is opened.
 9. One PDF selected: the Combine wedge is dimmed. One image selected: Combine produces a one-page PDF.
-10. Combine three images: strip appears sorted by name; Return writes `first-merged.pdf`.
+10. Combine three phone photos: strip appears sorted by name; Return writes `first-merged.pdf`. In Preview the pages are A4-sized (portrait or landscape to match each photo) and sharp when zoomed in.
 11. One PDF plus two images selected: the wheel shows only Markdown, Compress and Combine; Convert and the lower-left wedge are dimmed. Combine merges all three into one PDF. Compress writes a `-compressed` file for each.
 12. Remove the API key in settings. Markdown on a PDF: the settings window opens and nothing is uploaded.
 13. Enter the key. Markdown on the scanned PDF: the one-time "Send files to Mistral?" notice appears; Cancel uploads nothing. Run again, Continue: `name.md` appears with the recognised text. Run once more: no notice.

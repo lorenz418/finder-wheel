@@ -22,6 +22,8 @@
 - Both targets compile in Swift 5 language mode to avoid strict-concurrency friction. Do not change this.
 - Commit after every task with the message given. End every commit message with the line `Co-Authored-By: Claude <noreply@anthropic.com>`.
 - If code from this plan does not compile because an SDK API differs, check the SDK interface before improvising. Example: `grep -n "glassEffect" "$(xcrun --show-sdk-path)/System/Library/Frameworks/SwiftUICore.framework/Modules/SwiftUICore.swiftmodule/arm64e-apple-macos.swiftinterface"`. Keep the behaviour described in the plan; change only the call.
+- When a step says "Register in `ActionRouter`", insert the given `case` directly above the `default:` line of the switch in `ActionRouter.action(for:fileKind:)`.
+- Run tests in the default debug configuration. Test temp folders are deleted when their `TempFolder` value is released, which an optimised build may do before the end of the test.
 - APIs already verified against the installed SDK (Xcode 27): `glassEffect(_:in:)`, `Glass.regular`, `Glass.tint(_:)`, `GlassEffectContainer`, `kCGImageDestinationBackgroundColor`, `kCGImageDestinationImageMaxPixelSize`.
 
 ## File structure (created by this plan)
@@ -236,6 +238,7 @@ import UniformTypeIdentifiers
         #expect(Classifier.kind(of: .jpeg, isDirectory: false) == .image)
         #expect(Classifier.kind(of: .png, isDirectory: false) == .image)
         #expect(Classifier.kind(of: .heic, isDirectory: false) == .image)
+        #expect(Classifier.kind(of: .heif, isDirectory: false) == .image)
         #expect(Classifier.kind(of: .tiff, isDirectory: false) == .image)
         #expect(Classifier.kind(of: .webP, isDirectory: false) == .image)
         #expect(Classifier.kind(of: .quickTimeMovie, isDirectory: false) == .video)
@@ -296,7 +299,7 @@ public enum Classification: String, CaseIterable, Sendable {
 
 public enum Classifier {
     /// Image formats accepted as input. GIF is deliberately absent.
-    static let imageTypes: [UTType] = [.jpeg, .png, .heic, .tiff, .webP]
+    static let imageTypes: [UTType] = [.jpeg, .png, .heic, .heif, .tiff, .webP]
 
     public static func kind(of type: UTType?, isDirectory: Bool) -> FileKind {
         guard let type, !isDirectory else { return .unsupported }
@@ -715,7 +718,7 @@ The tracker turns the cursor offset from the wheel centre into a hit. Offsets us
 Rules:
 - Inside the dead zone (radius < 44): no hit.
 - In the ring (44 to 140): the 60° wedge under the cursor. A slot with no entry gives no hit.
-- Beyond 140: the slot is locked to the wedge the cursor left through. If that entry has one option the hit stays on the entry. Otherwise the outer ring is hit: options are 30° each, fanned symmetrically around the wedge's direction, and the index is clamped to the first and last option.
+- Beyond 140: the slot is locked to the wedge the cursor left through. If that entry has one option the hit stays on the entry. Otherwise the outer ring is hit: options are 30° each and the index is clamped to the first and last option. One option is always centred exactly on the wedge's direction, so a straight outward flick never lands on a border: with `n` options that is option `(n - 1) / 2` (integer division), which is the middle one of three and the second of two or four. With four options the fan therefore reaches one option further clockwise than counter-clockwise.
 - Coming back inside 140 unlocks the slot.
 
 **Files:**
@@ -779,13 +782,21 @@ import Foundation
     }
 
     @Test func outerRingPicksOptionByAngle() {
-        // 4 options around 60°: centres at 15°, 45°, 75°, 105°.
+        // 4 options around 60°: centres at 30°, 60°, 90°, 120°.
         var t = tracker([.upperRight: 4])
         #expect(hit(&t, 60, 90) == .entry(.upperRight))
-        #expect(hit(&t, 15, 180) == .option(.upperRight, 0))
-        #expect(hit(&t, 45, 180) == .option(.upperRight, 1))
-        #expect(hit(&t, 75, 180) == .option(.upperRight, 2))
-        #expect(hit(&t, 105, 180) == .option(.upperRight, 3))
+        // Leaving the ring straight through the wedge locks the slot and hits the option straight ahead.
+        #expect(hit(&t, 60, 180) == .option(.upperRight, 1))
+        #expect(hit(&t, 30, 180) == .option(.upperRight, 0))
+        #expect(hit(&t, 90, 180) == .option(.upperRight, 2))
+        #expect(hit(&t, 120, 180) == .option(.upperRight, 3))
+    }
+
+    @Test func twoOptionsFirstIsStraightAhead() {
+        var t = tracker([.upperRight: 2])
+        #expect(hit(&t, 60, 180) == .option(.upperRight, 0))
+        #expect(hit(&t, 90, 180) == .option(.upperRight, 1))
+        #expect(hit(&t, 20, 180) == .option(.upperRight, 0))
     }
 
     @Test func outerRingClampsAndStaysLocked() {
@@ -838,7 +849,7 @@ public struct WheelMetrics: Sendable {
 
     /// Centre angle in degrees (clockwise from up) of option `index` out of `count` for a slot.
     public func optionAngle(slot: Slot, index: Int, count: Int) -> Double {
-        Double(slot.rawValue) * 60 + (Double(index) - Double(count - 1) / 2) * optionArc
+        Double(slot.rawValue) * 60 + Double(index - (count - 1) / 2) * optionArc
     }
 }
 
@@ -893,7 +904,7 @@ public struct WheelTracker: Sendable {
         var delta = degrees - Double(slot.rawValue) * 60
         if delta > 180 { delta -= 360 }
         if delta < -180 { delta += 360 }
-        let raw = Int((delta / metrics.optionArc + Double(count) / 2).rounded(.down))
+        let raw = Int((delta / metrics.optionArc + 0.5).rounded(.down)) + (count - 1) / 2
         hit = .option(slot, min(max(raw, 0), count - 1))
     }
 }
@@ -902,7 +913,7 @@ public struct WheelTracker: Sendable {
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `swift test --filter WheelTrackerTests`
-Expected: PASS, 9 tests.
+Expected: PASS, 10 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -1117,8 +1128,10 @@ public enum OutputNamer {
     private static func unique(directory: URL, stem: String, ext: String?) -> URL {
         func candidate(_ n: Int) -> URL {
             let name = n == 1 ? stem : "\(stem)-\(n)"
-            let url = directory.appendingPathComponent(name)
-            return ext.map { url.appendingPathExtension($0) } ?? url
+            // A folder gets a directory URL (trailing slash), so it equals the URL that
+            // Foundation builds for the same path once the folder exists.
+            guard let ext else { return directory.appendingPathComponent(name, isDirectory: true) }
+            return directory.appendingPathComponent(name).appendingPathExtension(ext)
         }
         var n = 1
         while FileManager.default.fileExists(atPath: candidate(n).path) { n += 1 }
@@ -1718,7 +1731,8 @@ public final class JobCenter {
             outputs = $0.outputs
         }
         tasks[id] = nil
-        if !outputs.isEmpty { onFinished?(outputs) }
+        // A cancelled job keeps the files it already finished but does not reveal them.
+        if !outputs.isEmpty && !cancelled { onFinished?(outputs) }
     }
 }
 ```
@@ -2128,8 +2142,9 @@ import FinderWheelCore
 struct WheelView: View {
     let model: WheelModel
 
-    /// The panel is this size; the wheel is centred in it.
-    static let side: CGFloat = 460
+    /// The panel is this size; the wheel is centred in it. Follows the outer ring's radius
+    /// (460 with the default metrics), so tuning `WheelMetrics` never clips the wheel.
+    static let side: CGFloat = WheelMetrics().outerRingOuter * 2 + 48
 
     var body: some View {
         let m = model.metrics
@@ -2549,7 +2564,11 @@ final class AppController {
         trigger.onRelease = { [weak self] in self?.endWheel(commit: true) }
         trigger.onEscape = { [weak self] in self?.endWheel(commit: false) }
         wheel.onTick = { [weak self] in self?.trigger.pollRelease() }
-        wheel.onChoice = { [weak self] choice in self?.run(choice) }
+        // Deferred to the next run-loop turn so nothing started by a choice (a panel, an alert)
+        // runs inside the hotkey's event handler.
+        wheel.onChoice = { [weak self] choice in
+            DispatchQueue.main.async { self?.run(choice) }
+        }
         trigger.start()
     }
 
@@ -2587,7 +2606,7 @@ final class AppController {
     }
 
     private func run(_ choice: WheelChoice) {
-        let title = choice.entry.options.count > 1 ? "\(choice.entry.title) to \(choice.option.title)" : choice.entry.title
+        let title = choice.entry.options.count > 1 ? "\(choice.entry.title): \(choice.option.title)" : choice.entry.title
         jobCenter.start(title: title, inputs: choice.inputs, kind: choice.option.action, settings: settingsSnapshot())
     }
 }
@@ -2664,12 +2683,14 @@ Prepare a folder with: two PNG screenshots, one HEIC or JPG photo taken with loc
 15. Appearance: check the wheel over a light window, a dark window and the desktop picture, in light and dark mode. Labels stay readable.
 16. Flick quickly from the centre past the ring edge in the Convert direction. Note whether an outer-ring option is chosen by accident; if it happens often, raise `ringOuter` in `WheelMetrics` and re-run `swift test`.
 17. Slots that are not implemented yet (everything except image Convert) report "This action is not available for this file" in the menu. This is expected until Plans 2 and 3.
+18. Select a file whose icon is close to a screen edge and hold ⌥Space with the cursor on it. Part of the wheel is off-screen. Note which wedges cannot be reached and report this to the user; do not move the wheel away from the cursor without asking, because the gesture depends on the wheel being centred on it.
+19. Hold on two images, slide straight out through Convert without curving: the outer-ring option straight ahead (PNG) is highlighted, not a border between two.
 ```
 
 - [ ] **Step 2: Run the checks**
 
 Run: `scripts/build-app.sh && open "build/Finder Wheel.app"`
-Work through items 1 to 17. For each item that fails, fix the cause, re-run `swift test`, rebuild and re-check. Do not change behaviour that the spec defines; if a check contradicts the spec, stop and ask the user.
+Work through items 1 to 19. For each item that fails, fix the cause, re-run `swift test`, rebuild and re-check. Do not change behaviour that the spec defines; if a check contradicts the spec, stop and ask the user.
 
 Likely fixes:
 - Glass looks flat or grey in the non-key panel: wrap the `ZStack` in `WheelView` with `.environment(\.controlActiveState, .key)`; if still flat, set `panel.appearance` from `NSApp.effectiveAppearance` before showing.
@@ -2686,4 +2707,4 @@ git add -A
 git commit -m "Add manual checks and record permission verification"
 ```
 
-**Plan 1 is complete when:** `swift test` passes, checks 1 to 17 pass, and the spec's permission paragraph states the verified result. Continue with Plan 2.
+**Plan 1 is complete when:** `swift test` passes, checks 1 to 19 pass (18 is reported, not fixed), and the spec's permission paragraph states the verified result. Continue with Plan 2.
