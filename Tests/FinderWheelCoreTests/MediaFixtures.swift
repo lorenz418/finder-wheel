@@ -29,13 +29,14 @@ enum MediaFixtures {
     /// `noisy` fills frames with random pixels so the file is large enough to compress.
     @discardableResult
     static func writeVideo(to url: URL, seconds: Int = 2, width: Int = 640, height: Int = 480,
-                           noisy: Bool = false, silent: Bool = false) async throws -> URL {
+                           noisy: Bool = false, silent: Bool = false,
+                           codec: AVVideoCodecType = .h264) async throws -> URL {
         let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("FinderWheelMedia-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: scratch) }
 
         let videoOnly = silent ? url : scratch.appendingPathComponent("video.mov")
-        try await writeVideoTrack(to: videoOnly, seconds: seconds, width: width, height: height, noisy: noisy)
+        try await writeVideoTrack(to: videoOnly, seconds: seconds, width: width, height: height, noisy: noisy, codec: codec)
         if silent { return url }
 
         let tone = try writeTone(to: scratch.appendingPathComponent("tone.wav"), seconds: Double(seconds))
@@ -47,15 +48,16 @@ enum MediaFixtures {
         try videoTrack.insertTimeRange(range, of: try await videoAsset.loadTracks(withMediaType: .video)[0], at: .zero)
         let audioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
         try audioTrack.insertTimeRange(range, of: try await audioAsset.loadTracks(withMediaType: .audio)[0], at: .zero)
-        let session = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)!
+        let session = AVAssetExportSession(asset: composition, presetName: codec == .h264 ? AVAssetExportPresetHighestQuality : AVAssetExportPresetPassthrough)!
         try await session.export(to: url, as: .mov)
         return url
     }
 
-    private static func writeVideoTrack(to url: URL, seconds: Int, width: Int, height: Int, noisy: Bool) async throws {
+    private static func writeVideoTrack(to url: URL, seconds: Int, width: Int, height: Int, noisy: Bool,
+                                        codec: AVVideoCodecType) async throws {
         let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
-            AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: width, AVVideoHeightKey: height,
+            AVVideoCodecKey: codec, AVVideoWidthKey: width, AVVideoHeightKey: height,
         ])
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,

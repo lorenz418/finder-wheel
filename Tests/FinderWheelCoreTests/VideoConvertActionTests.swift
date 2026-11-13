@@ -28,11 +28,11 @@ import UniformTypeIdentifiers
             return description.map { CMFormatDescriptionGetMediaSubType($0) }
         }
         let tmp = TempFolder()
-        let input = try await MediaFixtures.writeVideo(to: tmp.file("clip.mov"))
+        let input = try await MediaFixtures.writeVideo(to: tmp.file("clip.mov"), codec: .hevc)
         _ = try await VideoConvertAction().run(input: input, context: context)
         let out = tmp.file("clip.mp4")
         let inputCodec = try await codec(input)
-        #expect(inputCodec != nil)
+        #expect(inputCodec == kCMVideoCodecType_HEVC)
         #expect(try await codec(out) == inputCodec)
         #expect(abs(try await MediaFixtures.duration(out) - MediaFixtures.duration(input)) < 0.1)
     }
