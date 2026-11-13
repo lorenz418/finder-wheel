@@ -110,4 +110,51 @@ private struct StubAction: FileAction {
         #expect(ActionRouter.action(for: .convert(.mp4), fileKind: .image) == nil)
         #expect(ActionRouter.action(for: .convert(.jpg), fileKind: .unsupported) == nil)
     }
+
+    @Test func cancelDuringLastFileStillFinishesWhenTheFileCompletes() async throws {
+        let jobs = center { url, _ in
+            try? await Task.sleep(for: .milliseconds(300)) // swallows the cancellation, completes anyway
+            return .produced([url])
+        }
+        var finished: [URL] = []
+        jobs.onFinished = { finished = $0 }
+        let id = jobs.start(title: "Convert", inputs: [files[0]], kind: .convert(.jpg), settings: SettingsSnapshot())
+        try await Task.sleep(for: .milliseconds(50))
+        jobs.cancel(id)
+        await jobs.wait(id)
+        let job = jobs.jobs.first { $0.id == id }!
+        #expect(job.state == .finished)
+        #expect(job.outputs == [files[0]])
+        #expect(finished == [files[0]])
+    }
+
+    @Test func strayCancellationErrorIsAFailureNoteAndTheBatchContinues() async {
+        let jobs = center { url, _ in
+            if url.lastPathComponent == "b.png" { throw CancellationError() }
+            return .produced([url])
+        }
+        let id = jobs.start(title: "Convert", inputs: files, kind: .convert(.jpg), settings: SettingsSnapshot())
+        await jobs.wait(id)
+        let job = jobs.jobs.first { $0.id == id }!
+        #expect(job.state == .finished)
+        #expect(job.outputs.count == 2)
+        #expect(job.notes.count == 1)
+        #expect(job.notes[0].file == "b.png")
+        #expect(job.notes[0].isFailure)
+    }
+
+    @Test func jobCapNeverDropsRunningJobs() async {
+        let jobs = center { url, _ in
+            try await Task.sleep(for: .seconds(30))
+            return .produced([url])
+        }
+        let ids = (0..<21).map { _ in
+            jobs.start(title: "Convert", inputs: [files[0]], kind: .convert(.jpg), settings: SettingsSnapshot())
+        }
+        #expect(jobs.jobs.count == 21)
+        #expect(jobs.jobs.allSatisfy { $0.state == .running })
+        for id in ids { jobs.cancel(id) }
+        for id in ids { await jobs.wait(id) }
+        #expect(jobs.jobs.allSatisfy { $0.state == .cancelled })
+    }
 }

@@ -62,8 +62,10 @@ public final class JobCenter {
     public func start(title: String, inputs: [URL], kind: ActionKind, settings: SettingsSnapshot) -> UUID {
         let id = addJob(title: title, total: inputs.count)
         tasks[id] = Task { [weak self] in
+            var stoppedEarly = false
             for input in inputs {
-                guard let self, !Task.isCancelled else { break }
+                guard let self else { return }
+                if Task.isCancelled { stoppedEarly = true; break }
                 let name = input.lastPathComponent
                 guard let action = self.resolve(kind, self.kindOf(input)) else {
                     self.addNote(id, file: name, message: "This action is not available for this file", isFailure: true)
@@ -75,15 +77,15 @@ public final class JobCenter {
                     case .produced(let urls): self.update(id) { $0.outputs += urls }
                     case .skipped(let reason): self.addNote(id, file: name, message: reason, isFailure: false)
                     }
-                } catch is CancellationError {
+                } catch is CancellationError where Task.isCancelled {
+                    stoppedEarly = true
                     break
                 } catch {
-                    if Task.isCancelled { break }
                     self.addNote(id, file: name, message: error.localizedDescription, isFailure: true)
                 }
                 self.update(id) { $0.done += 1; $0.currentFraction = 0 }
             }
-            self?.finish(id, cancelled: Task.isCancelled)
+            self?.finish(id, cancelled: stoppedEarly)
         }
         return id
     }
@@ -95,16 +97,16 @@ public final class JobCenter {
         let id = addJob(title: title, total: 1)
         tasks[id] = Task { [weak self] in
             guard let self else { return }
+            var stoppedEarly = false
             do {
                 let urls = try await operation(self.context(for: id, settings: settings))
                 self.update(id) { $0.outputs += urls }
-            } catch is CancellationError {
+            } catch is CancellationError where Task.isCancelled {
+                stoppedEarly = true
             } catch {
-                if !Task.isCancelled {
-                    self.addNote(id, file: title, message: error.localizedDescription, isFailure: true)
-                }
+                self.addNote(id, file: title, message: error.localizedDescription, isFailure: true)
             }
-            self.finish(id, cancelled: Task.isCancelled)
+            self.finish(id, cancelled: stoppedEarly)
         }
         return id
     }
@@ -121,7 +123,10 @@ public final class JobCenter {
     private func addJob(title: String, total: Int) -> UUID {
         let id = UUID()
         jobs.insert(Job(id: id, title: title, total: total), at: 0)
-        if jobs.count > 20 { jobs.removeLast(jobs.count - 20) }
+        // Trim the oldest finished jobs only; a running job is never dropped.
+        while jobs.count > 20, let index = jobs.lastIndex(where: { $0.state != .running }) {
+            jobs.remove(at: index)
+        }
         return id
     }
 
