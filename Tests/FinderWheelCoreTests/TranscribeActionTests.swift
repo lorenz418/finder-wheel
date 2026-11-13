@@ -2,6 +2,10 @@ import Testing
 import Foundation
 @testable import FinderWheelCore
 
+private final class TaskBox: @unchecked Sendable {
+    var task: Task<ActionOutcome, Error>?
+}
+
 @Suite struct TranscribeActionTests {
     private let english = Locale(identifier: "en_US")
 
@@ -66,11 +70,14 @@ import Foundation
         let tmp = TempFolder()
         let input = tmp.file("long.aiff")
         let sentence = "The quick brown fox jumps over the lazy dog. "
-        guard try speak(String(repeating: sentence, count: 5), to: input) else { return }
-        let ctx = context(english)
+        guard try speak(String(repeating: sentence, count: 30), to: input) else { return }
+        // Cancel from inside the job on the first transcription result, so the test does not depend on timing.
+        let box = TaskBox()
+        let ctx = ActionContext(settings: SettingsSnapshot(transcriptionLocale: english), progress: { fraction in
+            if fraction > 0 { box.task?.cancel() }
+        })
         let task = Task { try await TranscribeAction().run(input: input, context: ctx) }
-        try await Task.sleep(for: .milliseconds(300))
-        task.cancel()
+        box.task = task
         do {
             _ = try await task.value
             Issue.record("expected the cancelled job to throw")
