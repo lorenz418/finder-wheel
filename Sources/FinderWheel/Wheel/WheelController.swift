@@ -64,8 +64,12 @@ final class WheelController {
         guard isShowing else { return }
         timer?.invalidate()
         timer = nil
-        panel.orderOut(nil)
         model.isVisible = false
+        // Let the fade finish, unless the wheel was shown again in the meantime.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+            guard let self, !self.isShowing else { return }
+            self.panel.orderOut(nil)
+        }
         let hit = tracker?.hit ?? .none
         tracker = nil
         guard commit else { return }

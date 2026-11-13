@@ -3,6 +3,7 @@ import FinderWheelCore
 
 struct WheelView: View {
     let model: WheelModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The panel is this size; the wheel is centred in it. Follows the outer ring's radius
     /// (460 with the default metrics), so tuning `WheelMetrics` never clips the wheel.
@@ -40,6 +41,7 @@ struct WheelView: View {
                         .position(.polar(center: center,
                                          degrees: m.optionAngle(slot: slot, index: index, count: entry.options.count),
                                          radius: (m.ringOuter + m.outerRingOuter) / 2))
+                        .transition(.opacity)
                 }
             }
             Text(model.isUnsupported ? "No actions for\nthis selection" : model.summary)
@@ -49,10 +51,11 @@ struct WheelView: View {
                 .frame(width: m.deadZone * 2 - 20)
         }
         .frame(width: Self.side, height: Self.side)
-        .scaleEffect(model.isVisible ? 1 : 0.9)
+        .scaleEffect(model.isVisible || reduceMotion ? 1 : 0.9)
         .opacity(model.isVisible ? 1 : 0)
         .animation(.easeOut(duration: 0.12), value: model.isVisible)
         .animation(.easeOut(duration: 0.1), value: model.hit)
+        .animation(.spring(duration: 0.18, bounce: 0.15), value: model.expandedSlot)
     }
 
     private func isEntryHit(_ slot: Slot) -> Bool {
@@ -84,7 +87,7 @@ struct WheelView: View {
             .glassEffect(isOptionHit(slot, index) ? .regular.tint(.accentColor) : .regular,
                          in: WedgeShape(centerDegrees: m.optionAngle(slot: slot, index: index, count: count),
                                         spanDegrees: m.optionArc, innerRadius: m.ringOuter + 4, outerRadius: m.outerRingOuter))
-            .transition(.opacity)
+            .transition(reduceMotion ? .opacity : .scale(scale: 0.86).combined(with: .opacity))
     }
 
     private func wedgeLabel(_ entry: WheelEntry) -> some View {
@@ -101,5 +104,6 @@ struct WheelView: View {
             }
         }
         .foregroundStyle(active ? Color.white : Color.primary)
+        .scaleEffect(active && !reduceMotion ? 1.06 : 1)
     }
 }
