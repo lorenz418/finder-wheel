@@ -28,6 +28,20 @@ import UniformTypeIdentifiers
         #expect(abs(delay - 1.0 / 12) < 0.02)
     }
 
+    @Test func frameDelaysSumToTheDuration() async throws {
+        let tmp = TempFolder()
+        let input = try await MediaFixtures.writeVideo(to: tmp.file("clip.mov"), seconds: 2, width: 640, height: 480)
+        _ = try await VideoToGIFAction().run(input: input, context: context)
+        let source = try #require(CGImageSourceCreateWithURL(tmp.file("clip.gif") as CFURL, nil))
+        var total = 0.0
+        for i in 0..<CGImageSourceGetCount(source) {
+            let props = CGImageSourceCopyPropertiesAtIndex(source, i, nil) as? [CFString: Any]
+            let gif = props?[kCGImagePropertyGIFDictionary] as? [CFString: Any]
+            total += gif?[kCGImagePropertyGIFUnclampedDelayTime] as? Double ?? 0
+        }
+        #expect(abs(total - 2.0) <= 0.011)
+    }
+
     @Test func audioFileHasNoVideoTrack() async throws {
         let tmp = TempFolder()
         let input = try MediaFixtures.writeTone(to: tmp.file("memo.wav"))

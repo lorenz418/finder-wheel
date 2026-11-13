@@ -27,10 +27,14 @@ public struct VideoToGIFAction: FileAction {
             guard let dest = CGImageDestinationCreateWithURL(temp as CFURL, UTType.gif.identifier as CFString, frameCount, nil) else {
                 throw ActionError("Could not write GIF")
             }
-            CGImageDestinationSetProperties(dest, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]] as CFDictionary)
-            let frameProps = [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 1.0 / Double(Self.framesPerSecond)]] as CFDictionary
+            CGImageDestinationSetProperties(dest, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0, kCGImagePropertyGIFHasGlobalColorMap: false]] as CFDictionary)
+            // GIF delays are whole centiseconds, so spread the rounding error across frames to keep the total exact.
+            let fps = Double(Self.framesPerSecond)
+            func centiseconds(_ i: Int) -> Int { Int((Double(i) * 100 / fps).rounded()) }
             for frame in 0..<frameCount {
                 try Task.checkCancellation()
+                let delay = Double(centiseconds(frame + 1) - centiseconds(frame)) / 100
+                let frameProps = [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: delay]] as CFDictionary
                 let time = CMTime(value: CMTimeValue(frame), timescale: CMTimeScale(Self.framesPerSecond))
                 let image = try await generator.image(at: time).image
                 CGImageDestinationAddImage(dest, image, frameProps)
