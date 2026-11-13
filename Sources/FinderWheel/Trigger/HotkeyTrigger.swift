@@ -14,6 +14,7 @@ final class HotkeyTrigger {
     private var escapeModRef: EventHotKeyRef?
     private var polledDown = false
     private var upTicks = 0
+    private var pollTimer: Timer?
     private var handlerRef: EventHandlerRef?
     private var activationObserver: NSObjectProtocol?
     private(set) var isHeld = false
@@ -27,6 +28,7 @@ final class HotkeyTrigger {
     }
 
     deinit {
+        pollTimer?.invalidate()
         unregister(&mainRef)
         unregister(&escapeRef)
         unregister(&escapeModRef)
@@ -64,16 +66,37 @@ final class HotkeyTrigger {
         }
     }
 
-    /// Fires `onRelease` if the hotkey's key is no longer physically down.
+    /// Fires `onRelease` if the hotkey is no longer physically held. Runs on its own timer
+    /// while the hotkey is held, as a safety net for a missed key-up event.
     func pollRelease() {
         guard isHeld else { return }
-        if CGEventSource.keyState(.combinedSessionState, key: CGKeyCode(combo.keyCode)) {
-            polledDown = true
-            upTicks = 0
-        } else if polledDown {
+        let keyDown = CGEventSource.keyState(.combinedSessionState, key: CGKeyCode(combo.keyCode))
+        if keyDown { polledDown = true }
+        // The key reading may be unreliable without Input Monitoring, so it only counts once
+        // it has been seen down. Modifier state needs no permission.
+        let released = !modifiersHeld || (polledDown && !keyDown)
+        if released {
             upTicks += 1
             if upTicks >= 3 { handle(id: Self.mainID, pressed: false) }
+        } else {
+            upTicks = 0
         }
+    }
+
+    private var modifiersHeld: Bool {
+        var required: NSEvent.ModifierFlags = []
+        if combo.modifiers & UInt32(optionKey) != 0 { required.insert(.option) }
+        if combo.modifiers & UInt32(controlKey) != 0 { required.insert(.control) }
+        if combo.modifiers & UInt32(cmdKey) != 0 { required.insert(.command) }
+        if combo.modifiers & UInt32(shiftKey) != 0 { required.insert(.shift) }
+        return NSEvent.modifierFlags.isSuperset(of: required)
+    }
+
+    private func startPolling() {
+        pollTimer?.invalidate()
+        let timer = Timer(timeInterval: 1.0 / 120, repeats: true) { [weak self] _ in self?.pollRelease() }
+        RunLoop.main.add(timer, forMode: .common)
+        pollTimer = timer
     }
 
     private var finderIsFrontmost: Bool {
@@ -127,10 +150,13 @@ final class HotkeyTrigger {
             isHeld = true
             polledDown = false
             upTicks = 0
+            startPolling()
             onPress?()
         case (Self.mainID, false):
             guard isHeld else { return }
             isHeld = false
+            pollTimer?.invalidate()
+            pollTimer = nil
             onRelease?()
             updateRegistration()
         case (Self.escapeID, true):
