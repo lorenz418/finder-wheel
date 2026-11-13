@@ -28,6 +28,8 @@ public enum ActionRouter {
             return VideoConvertAction()
         case (.compress(let preset), .video):
             return VideoCompressAction(preset: preset)
+        case (.convert(.gif), .video):
+            return VideoToGIFAction()
         default:
             return nil
         }
