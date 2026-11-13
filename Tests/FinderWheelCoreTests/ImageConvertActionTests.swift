@@ -76,4 +76,41 @@ import UniformTypeIdentifiers
             _ = try await ImageConvertAction(target: .mp4).run(input: input, context: context())
         }
     }
+
+    /// A JPEG whose only location is in XMP (exif:GPSLatitude / exif:GPSLongitude), with no GPS dictionary.
+    private func writeXMPLocationJPEG(to url: URL) {
+        let metadata = CGImageMetadataCreateMutable()
+        #expect(CGImageMetadataSetValueWithPath(metadata, nil, "exif:GPSLatitude" as CFString, "48,8.22N" as CFString))
+        #expect(CGImageMetadataSetValueWithPath(metadata, nil, "exif:GPSLongitude" as CFString, "11,34.5E" as CFString))
+        let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImageAndMetadata(dest, Fixtures.cgImage(), metadata, nil)
+        precondition(CGImageDestinationFinalize(dest))
+    }
+
+    private func xmpHasGPS(_ url: URL) -> Bool {
+        let source = CGImageSourceCreateWithURL(url as CFURL, nil)!
+        guard let metadata = CGImageSourceCopyMetadataAtIndex(source, 0, nil) else { return false }
+        return ["exif:GPSLatitude", "exif:GPSLongitude"].contains {
+            CGImageMetadataCopyTagWithPath(metadata, nil, $0 as CFString) != nil
+        }
+    }
+
+    @Test func stripsXMPLocationToo() async throws {
+        let tmp = TempFolder()
+        let input = tmp.file("x.jpg")
+        writeXMPLocationJPEG(to: input)
+        #expect(xmpHasGPS(input))
+        _ = try await ImageConvertAction(target: .heic).run(input: input, context: context(strip: true))
+        let output = tmp.file("x.heic")
+        #expect(!xmpHasGPS(output))
+        #expect(Fixtures.imageProperties(output)[kCGImagePropertyGPSDictionary] == nil)
+    }
+
+    @Test func keepsXMPLocationWhenStrippingIsOff() async throws {
+        let tmp = TempFolder()
+        let input = tmp.file("x.jpg")
+        writeXMPLocationJPEG(to: input)
+        _ = try await ImageConvertAction(target: .heic).run(input: input, context: context(strip: false))
+        #expect(xmpHasGPS(tmp.file("x.heic")))
+    }
 }

@@ -24,7 +24,7 @@ enum ImageIOHelper {
         if stripLocation { props[kCGImagePropertyGPSDictionary] = kCFNull! }
         if let maxPixel { props[kCGImageDestinationImageMaxPixelSize] = maxPixel }
         if flattenAlpha { props[kCGImageDestinationBackgroundColor] = CGColor(red: 1, green: 1, blue: 1, alpha: 1) }
-        CGImageDestinationAddImageFromSource(dest, source, 0, props as CFDictionary)
+        CGImageDestinationAddImageFromSource(dest, source, CGImageSourceGetPrimaryImageIndex(source), props as CFDictionary)
         guard CGImageDestinationFinalize(dest) else { throw ActionError("Could not write image") }
     }
 }
