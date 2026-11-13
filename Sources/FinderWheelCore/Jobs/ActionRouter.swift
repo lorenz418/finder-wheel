@@ -24,6 +24,10 @@ public enum ActionRouter {
             return AudioEncodeAction.convert
         case (.compress(let preset), .audio):
             return AudioEncodeAction.compress(preset)
+        case (.convert(.mp4), .video):
+            return VideoConvertAction()
+        case (.compress(let preset), .video):
+            return VideoCompressAction(preset: preset)
         default:
             return nil
         }
