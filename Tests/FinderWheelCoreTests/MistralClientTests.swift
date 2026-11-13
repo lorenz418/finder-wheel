@@ -57,6 +57,9 @@ import Foundation
         #expect(throws: ActionError("Mistral: Rate limit exceeded (HTTP 429)")) {
             _ = try MistralClient.parse(data: Data(#"{"detail":"Rate limit exceeded"}"#.utf8), status: 429)
         }
+        #expect(throws: ActionError("Mistral: first; second (HTTP 422)")) {
+            _ = try MistralClient.parse(data: Data(#"{"detail":[{"loc":["a"],"msg":"first"},{"loc":["b"],"msg":"second"}]}"#.utf8), status: 422)
+        }
         #expect(throws: ActionError("Mistral: request failed (HTTP 500)")) {
             _ = try MistralClient.parse(data: Data("<html>".utf8), status: 500)
         }

@@ -28,7 +28,7 @@ enum ImageIOHelper {
         guard CGImageDestinationFinalize(dest) else { throw ActionError("Could not write image") }
     }
 
-    /// The first image of `source` as JPEG data, transparency flattened onto white.
+    /// The primary image of `source` as JPEG data, transparency flattened onto white.
     static func jpegData(source: CGImageSource, quality: Double = 0.9) throws -> Data {
         let data = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil) else {
@@ -38,7 +38,7 @@ enum ImageIOHelper {
             kCGImageDestinationLossyCompressionQuality: quality,
             kCGImageDestinationBackgroundColor: CGColor(red: 1, green: 1, blue: 1, alpha: 1),
         ]
-        CGImageDestinationAddImageFromSource(dest, source, 0, props as CFDictionary)
+        CGImageDestinationAddImageFromSource(dest, source, CGImageSourceGetPrimaryImageIndex(source), props as CFDictionary)
         guard CGImageDestinationFinalize(dest) else { throw ActionError("Could not encode image") }
         return data as Data
     }

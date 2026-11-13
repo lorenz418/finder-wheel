@@ -27,7 +27,7 @@ public enum MistralClient {
         request.timeoutInterval = 300
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.httpBody = try JSONSerialization.data(withJSONObject: body, options: .withoutEscapingSlashes)
         return request
     }
 
@@ -43,7 +43,12 @@ public enum MistralClient {
     static func parse(data: Data, status: Int) throws -> String {
         guard (200..<300).contains(status) else {
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            let message = (json?["message"] as? String) ?? (json?["detail"] as? String) ?? "request failed"
+            // Validation errors (422) carry `detail` as an array of objects with a `msg`.
+            let detailMessages = (json?["detail"] as? [[String: Any]])?.compactMap { $0["msg"] as? String } ?? []
+            let message = (json?["message"] as? String)
+                ?? (json?["detail"] as? String)
+                ?? (detailMessages.isEmpty ? nil : detailMessages.joined(separator: "; "))
+                ?? "request failed"
             throw ActionError("Mistral: \(message) (HTTP \(status))")
         }
         guard let response = try? JSONDecoder().decode(OCRResponse.self, from: data) else {
