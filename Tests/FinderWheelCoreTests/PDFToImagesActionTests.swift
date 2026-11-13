@@ -45,6 +45,21 @@ import UniformTypeIdentifiers
         #expect(size.height == 1653)
     }
 
+    @Test func croppedPagesAreRenderedAtTheirCropBox() async throws {
+        let tmp = TempFolder()
+        let plain = Fixtures.writePDF(to: tmp.file("plain.pdf"), pages: 1)
+        let doc = PDFDocument(url: plain)!
+        let page = doc.page(at: 0)!
+        page.setBounds(CGRect(x: 0, y: 0, width: 700, height: 950), for: .mediaBox)
+        page.setBounds(CGRect(x: 50, y: 50, width: 595, height: 842), for: .cropBox)
+        let input = tmp.file("cropped.pdf")
+        #expect(doc.write(to: input))
+        _ = try await PDFToImagesAction(target: .png).run(input: input, context: context)
+        let size = Fixtures.pixelSize(tmp.file("cropped-pages/cropped-p01.png"))
+        #expect(size.width == 1653)
+        #expect(size.height == 2339)
+    }
+
     @Test func secondRunUsesANewFolder() async throws {
         let tmp = TempFolder()
         let input = Fixtures.writePDF(to: tmp.file("a.pdf"), pages: 1)

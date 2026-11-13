@@ -44,7 +44,7 @@ public struct PDFToImagesAction: FileAction {
     }
 
     private static func render(_ page: PDFPage, to url: URL, type: UTType) throws {
-        let box = page.bounds(for: .mediaBox)
+        let box = page.bounds(for: .cropBox)
         let sideways = page.rotation % 180 != 0
         let pointSize = sideways ? CGSize(width: box.height, height: box.width) : box.size
         let scale = dpi / 72
@@ -60,7 +60,7 @@ public struct PDFToImagesAction: FileAction {
         ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
         ctx.scaleBy(x: scale, y: scale)
         // PDFPage.draw applies the page's rotation and box origin itself.
-        page.draw(with: .mediaBox, to: ctx)
+        page.draw(with: .cropBox, to: ctx)
         guard let image = ctx.makeImage(),
               let dest = CGImageDestinationCreateWithURL(url as CFURL, type.identifier as CFString, 1, nil) else {
             throw ActionError("Could not render PDF page")
