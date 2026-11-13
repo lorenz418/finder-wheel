@@ -1,4 +1,5 @@
 import Testing
+import Foundation
 import UniformTypeIdentifiers
 @testable import FinderWheelCore
 
@@ -16,6 +17,16 @@ import UniformTypeIdentifiers
         #expect(Classifier.kind(of: .mp3, isDirectory: false) == .audio)
         #expect(Classifier.kind(of: .mpeg4Audio, isDirectory: false) == .audio)
         #expect(Classifier.kind(of: .wav, isDirectory: false) == .audio)
+    }
+
+    @Test func kindFromURL() throws {
+        let tmp = TempFolder()
+        let png = Fixtures.writeImage(to: tmp.file("pic.png"), type: .png)
+        #expect(Classifier.kind(of: png) == .image)
+        let folder = tmp.file("sub")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+        #expect(Classifier.kind(of: folder) == .unsupported)
+        #expect(Classifier.kind(of: tmp.file("missing.pdf")) == .pdf)
     }
 
     @Test func unsupportedKinds() {
