@@ -61,6 +61,25 @@ import Foundation
         #expect(!FileManager.default.fileExists(atPath: tmp.file("tone.md").path))
     }
 
+    @Test func cancelStopsTranscriptionAndWritesNothing() async throws {
+        guard await SpeechModels.isInstalled(english) else { return }
+        let tmp = TempFolder()
+        let input = tmp.file("long.aiff")
+        let sentence = "The quick brown fox jumps over the lazy dog. "
+        guard try speak(String(repeating: sentence, count: 5), to: input) else { return }
+        let ctx = context(english)
+        let task = Task { try await TranscribeAction().run(input: input, context: ctx) }
+        try await Task.sleep(for: .milliseconds(300))
+        task.cancel()
+        do {
+            _ = try await task.value
+            Issue.record("expected the cancelled job to throw")
+        } catch {
+            #expect(error is CancellationError || task.isCancelled)
+        }
+        #expect(!FileManager.default.fileExists(atPath: tmp.file("long.md").path))
+    }
+
     @Test func routerKnowsTranscription() {
         #expect(ActionRouter.action(for: .markdown, fileKind: .video) is TranscribeAction)
         #expect(ActionRouter.action(for: .markdown, fileKind: .audio) is TranscribeAction)

@@ -22,7 +22,9 @@ public struct TranscribeAction: FileAction {
 
         // Videos: pull the audio out first. Audio files are read as they are.
         var audioURL = input
-        if Classifier.kind(of: input) == .video {
+        let isVideo = Classifier.kind(of: input) == .video
+        let base = isVideo ? 0.2 : 0.0
+        if isVideo {
             audioURL = scratch.appendingPathComponent("audio.m4a")
             try await AudioEncoder.encodeM4A(from: input, to: audioURL, stereoBitrate: 128_000) { fraction in
                 context.progress(fraction * 0.2)
@@ -32,20 +34,29 @@ public struct TranscribeAction: FileAction {
             throw ActionError("Could not read audio")
         }
 
+        let seconds = Double(audioFile.length) / audioFile.processingFormat.sampleRate
         let transcriber = SpeechTranscriber(locale: locale, preset: .transcription)
         let analyzer = SpeechAnalyzer(modules: [transcriber])
         let collector = Task { () throws -> String in
             var text = ""
             for try await result in transcriber.results {
                 text += String(result.text.characters)
+                if seconds > 0 {
+                    context.progress(base + (0.95 - base) * min(1, result.range.end.seconds / seconds))
+                }
             }
             return text
         }
         do {
-            if let lastSample = try await analyzer.analyzeSequence(from: audioFile) {
-                try await analyzer.finalizeAndFinish(through: lastSample)
-            } else {
-                await analyzer.cancelAndFinishNow()
+            // finalizeAndFinish ignores task cancellation, so stop the analyzer explicitly.
+            try await withTaskCancellationHandler {
+                if let lastSample = try await analyzer.analyzeSequence(from: audioFile) {
+                    try await analyzer.finalizeAndFinish(through: lastSample)
+                } else {
+                    await analyzer.cancelAndFinishNow()
+                }
+            } onCancel: {
+                Task { await analyzer.cancelAndFinishNow() }
             }
         } catch {
             collector.cancel()
@@ -56,6 +67,7 @@ public struct TranscribeAction: FileAction {
         guard !transcript.isEmpty else { throw ActionError("No speech found") }
         context.progress(0.95)
 
+        try Task.checkCancellation()
         let output = OutputNamer.fileURL(for: input, suffix: nil, ext: "md")
         try AtomicOutput.write(to: output) { temp in
             try Data((transcript + "\n").utf8).write(to: temp)
