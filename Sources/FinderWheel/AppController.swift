@@ -11,12 +11,16 @@ final class AppController {
     private(set) var permissionProblem: String?
     private(set) var hotkeyLabel = HotkeyCombo.optionSpace.label
 
-    @ObservationIgnored private let trigger = HotkeyTrigger(combo: .optionSpace)
+    let settings = AppSettings()
+    @ObservationIgnored private let settingsWindow = SettingsWindowController()
+    @ObservationIgnored private let trigger: HotkeyTrigger
     @ObservationIgnored private let reader = FinderSelectionReader()
     @ObservationIgnored private let wheel = WheelController(lastUsed: LastUsedStore())
     @ObservationIgnored private let reorder = ReorderPanelController()
 
     init() {
+        trigger = HotkeyTrigger(combo: settings.hotkey)
+        hotkeyLabel = settings.hotkey.label
         jobCenter.onFinished = { urls in
             NSWorkspace.shared.activateFileViewerSelecting(urls)
         }
@@ -30,15 +34,33 @@ final class AppController {
             DispatchQueue.main.async { self?.run(choice) }
         }
         trigger.start()
+        observeHotkey()
     }
 
     func openAutomationSettings() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!)
     }
 
-    /// Settings passed to every job. Plan 2 replaces this with the stored settings.
     private func settingsSnapshot() -> SettingsSnapshot {
-        SettingsSnapshot()
+        settings.snapshot()
+    }
+
+    func openSettings() {
+        settingsWindow.show(settings: settings)
+    }
+
+    /// Re-registers the hotkey whenever the setting changes.
+    private func observeHotkey() {
+        withObservationTracking {
+            _ = settings.hotkeyID
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.trigger.setCombo(self.settings.hotkey)
+                self.hotkeyLabel = self.settings.hotkey.label
+                self.observeHotkey()
+            }
+        }
     }
 
     private func hotkeyPressed() {

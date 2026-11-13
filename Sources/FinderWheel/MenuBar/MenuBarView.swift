@@ -30,7 +30,11 @@ struct MenuBarView: View {
                 .frame(maxHeight: 320)
             }
             Divider()
-            Button("Quit Finder Wheel") { NSApplication.shared.terminate(nil) }
+            HStack {
+                Button("Settings…") { controller.openSettings() }
+                Spacer()
+                Button("Quit Finder Wheel") { NSApplication.shared.terminate(nil) }
+            }
         }
         .padding(14)
         .frame(width: 300)
