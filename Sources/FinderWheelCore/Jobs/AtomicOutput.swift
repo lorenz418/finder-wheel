@@ -22,8 +22,15 @@ public enum AtomicOutput {
     }
 
     private static func makeTemp(for final: URL) throws -> (dir: URL, temp: URL) {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("FinderWheel-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let dir: URL
+        // Prefer a folder on the destination's volume so the final move is a rename, never a visible copy.
+        if let onVolume = try? FileManager.default.url(for: .itemReplacementDirectory, in: .userDomainMask,
+                                                       appropriateFor: final.deletingLastPathComponent(), create: true) {
+            dir = onVolume
+        } else {
+            dir = FileManager.default.temporaryDirectory.appendingPathComponent("FinderWheel-\(UUID().uuidString)")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
         return (dir, dir.appendingPathComponent(final.lastPathComponent))
     }
 }

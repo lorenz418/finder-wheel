@@ -72,4 +72,30 @@ import Foundation
         }
         #expect(try String(contentsOf: final, encoding: .utf8) == "x")
     }
+
+    @Test func atomicTempFolderIsOnTheDestinationVolume() throws {
+        let tmp = TempFolder()
+        let final = tmp.file("out.txt")
+        try AtomicOutput.write(to: final) { temp in
+            let tempVolume = try temp.deletingLastPathComponent().resourceValues(forKeys: [.volumeIdentifierKey]).volumeIdentifier
+            let destVolume = try tmp.url.resourceValues(forKeys: [.volumeIdentifierKey]).volumeIdentifier
+            #expect(tempVolume?.isEqual(destVolume) == true)
+            try Data("hi".utf8).write(to: temp)
+        }
+    }
+
+    @Test func asyncWriteCancelledLeavesNothing() async {
+        let tmp = TempFolder()
+        let final = tmp.file("out.txt")
+        let task = Task {
+            try await AtomicOutput.write(to: final) { temp in
+                try Data("partial".utf8).write(to: temp)
+                try await Task.sleep(for: .seconds(30))
+            }
+        }
+        try? await Task.sleep(for: .milliseconds(200))
+        task.cancel()
+        _ = await task.result
+        #expect(!FileManager.default.fileExists(atPath: final.path))
+    }
 }
