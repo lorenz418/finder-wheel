@@ -157,4 +157,34 @@ private struct StubAction: FileAction {
         for id in ids { await jobs.wait(id) }
         #expect(jobs.jobs.allSatisfy { $0.state == .cancelled })
     }
+
+    @Test func cancelWithNonCancellationErrorIsNotAFailure() async throws {
+        let jobs = center { _, _ in
+            try? await Task.sleep(for: .seconds(30))
+            throw ActionError("Upload cancelled")
+        }
+        let id = jobs.start(title: "Convert", inputs: files, kind: .convert(.jpg), settings: SettingsSnapshot())
+        try await Task.sleep(for: .milliseconds(50))
+        jobs.cancel(id)
+        await jobs.wait(id)
+        let job = jobs.jobs.first { $0.id == id }!
+        #expect(job.state == .cancelled)
+        #expect(job.notes.isEmpty)
+        #expect(!jobs.hasWarning)
+    }
+
+    @Test func batchCancelWithNonCancellationErrorIsNotAFailure() async throws {
+        let jobs = center { _, _ in .skipped("unused") }
+        let id = jobs.startBatch(title: "Combine", settings: SettingsSnapshot()) { _ in
+            try? await Task.sleep(for: .seconds(30))
+            throw ActionError("Upload cancelled")
+        }
+        try await Task.sleep(for: .milliseconds(50))
+        jobs.cancel(id)
+        await jobs.wait(id)
+        let job = jobs.jobs.first { $0.id == id }!
+        #expect(job.state == .cancelled)
+        #expect(job.notes.isEmpty)
+        #expect(!jobs.hasWarning)
+    }
 }

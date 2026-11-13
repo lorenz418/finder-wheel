@@ -81,6 +81,8 @@ public final class JobCenter {
                     stoppedEarly = true
                     break
                 } catch {
+                    // An action that reacts to cancellation with its own error is still a cancellation.
+                    if Task.isCancelled { stoppedEarly = true; break }
                     self.addNote(id, file: name, message: error.localizedDescription, isFailure: true)
                 }
                 self.update(id) { $0.done += 1; $0.currentFraction = 0 }
@@ -104,7 +106,11 @@ public final class JobCenter {
             } catch is CancellationError where Task.isCancelled {
                 stoppedEarly = true
             } catch {
-                self.addNote(id, file: title, message: error.localizedDescription, isFailure: true)
+                if Task.isCancelled {
+                    stoppedEarly = true
+                } else {
+                    self.addNote(id, file: title, message: error.localizedDescription, isFailure: true)
+                }
             }
             self.finish(id, cancelled: stoppedEarly)
         }

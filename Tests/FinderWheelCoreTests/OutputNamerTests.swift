@@ -2,6 +2,8 @@ import Testing
 import Foundation
 @testable import FinderWheelCore
 
+final class Box: @unchecked Sendable { var url: URL? }
+
 @Suite struct OutputNamerTests {
     @Test func suffixAndExtension() {
         let tmp = TempFolder()
@@ -55,13 +57,16 @@ import Foundation
         let tmp = TempFolder()
         let final = tmp.file("out.txt")
         struct Boom: Error {}
+        let box = Box()
         #expect(throws: Boom.self) {
             try AtomicOutput.write(to: final) { temp in
+                box.url = temp
                 try Data("partial".utf8).write(to: temp)
                 throw Boom()
             }
         }
         #expect(!FileManager.default.fileExists(atPath: final.path))
+        #expect(!FileManager.default.fileExists(atPath: box.url!.deletingLastPathComponent().path))
     }
 
     @Test func atomicWriteNeverOverwrites() throws {
@@ -73,6 +78,7 @@ import Foundation
         #expect(try String(contentsOf: final, encoding: .utf8) == "x")
     }
 
+    // On a single-volume machine this cannot distinguish the old behaviour; it guards against regressions only.
     @Test func atomicTempFolderIsOnTheDestinationVolume() throws {
         let tmp = TempFolder()
         let final = tmp.file("out.txt")
@@ -87,8 +93,10 @@ import Foundation
     @Test func asyncWriteCancelledLeavesNothing() async {
         let tmp = TempFolder()
         let final = tmp.file("out.txt")
+        let box = Box()
         let task = Task {
             try await AtomicOutput.write(to: final) { temp in
+                box.url = temp
                 try Data("partial".utf8).write(to: temp)
                 try await Task.sleep(for: .seconds(30))
             }
@@ -97,5 +105,6 @@ import Foundation
         task.cancel()
         _ = await task.result
         #expect(!FileManager.default.fileExists(atPath: final.path))
+        #expect(!FileManager.default.fileExists(atPath: box.url!.deletingLastPathComponent().path))
     }
 }
