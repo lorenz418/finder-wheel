@@ -12,7 +12,7 @@ public struct CombineAction: Sendable {
         for (index, input) in inputs.enumerated() {
             try Task.checkCancellation()
             do {
-                try Self.append(input, to: merged)
+                try autoreleasepool { try Self.append(input, to: merged) }
             } catch let error as ActionError {
                 throw ActionError("\(input.lastPathComponent): \(error.message)")
             }

@@ -31,9 +31,12 @@ public struct PDFToImagesAction: FileAction {
             try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
             for index in 0..<doc.pageCount {
                 try Task.checkCancellation()
-                guard let page = doc.page(at: index) else { continue }
-                let name = OutputNamer.pageFileName(base: base, index: index, count: doc.pageCount, ext: target.rawValue)
-                try Self.render(page, to: temp.appendingPathComponent(name), type: type)
+                // Each page bitmap is large; release it before the next page.
+                try autoreleasepool {
+                    guard let page = doc.page(at: index) else { return }
+                    let name = OutputNamer.pageFileName(base: base, index: index, count: doc.pageCount, ext: target.rawValue)
+                    try Self.render(page, to: temp.appendingPathComponent(name), type: type)
+                }
                 context.progress(Double(index + 1) / Double(doc.pageCount))
             }
         }
