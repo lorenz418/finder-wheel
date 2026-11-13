@@ -1,5 +1,7 @@
 import Testing
 import Foundation
+import AVFoundation
+import CoreMedia
 import UniformTypeIdentifiers
 @testable import FinderWheelCore
 
@@ -17,6 +19,22 @@ import UniformTypeIdentifiers
         #expect(try await MediaFixtures.trackCount(out, .video) == 1)
         #expect(try await MediaFixtures.trackCount(out, .audio) == 1)
         #expect(FileManager.default.fileExists(atPath: input.path))
+    }
+
+    @Test func compatibleVideoIsRemuxedWithoutReencoding() async throws {
+        func codec(_ url: URL) async throws -> FourCharCode? {
+            let track = try await AVURLAsset(url: url).loadTracks(withMediaType: .video).first
+            let description = try await track?.load(.formatDescriptions).first
+            return description.map { CMFormatDescriptionGetMediaSubType($0) }
+        }
+        let tmp = TempFolder()
+        let input = try await MediaFixtures.writeVideo(to: tmp.file("clip.mov"))
+        _ = try await VideoConvertAction().run(input: input, context: context)
+        let out = tmp.file("clip.mp4")
+        let inputCodec = try await codec(input)
+        #expect(inputCodec != nil)
+        #expect(try await codec(out) == inputCodec)
+        #expect(abs(try await MediaFixtures.duration(out) - MediaFixtures.duration(input)) < 0.1)
     }
 
     @Test func skipsMP4Input() async throws {

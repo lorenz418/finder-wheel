@@ -454,7 +454,7 @@ git commit -m "Add audio encoder, convert to M4A and audio compress"
 ### Task 3: Convert video to MP4 and Compress video
 
 Behaviour:
-- Convert to MP4: re-exports with the system's highest-quality preset into an MP4 container, output `<name>.mp4`. An input that is already MP4 is skipped with "Already MP4".
+- Convert to MP4: copies the streams into an MP4 container without re-encoding when the source allows it (`AVAssetExportPresetPassthrough`, which keeps quality, HDR and 10-bit), and otherwise re-exports with the system's highest-quality preset, output `<name>.mp4`. An input that is already MP4 is skipped with "Already MP4".
 - Video Compress (spec presets): light, medium, strong use the system export presets 1920x1080, 1280x720, 960x540 (these never upscale), output `<name>-compressed.mp4`; skipped with "Already as small as it gets" if not smaller.
 - A file without a video track fails with "No video track".
 - Progress comes from the export session.
