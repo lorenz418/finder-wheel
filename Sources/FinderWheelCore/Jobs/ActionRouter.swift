@@ -16,6 +16,8 @@ public enum ActionRouter {
             return PDFToImagesAction(target: target)
         case (.splitPDF, .pdf):
             return PDFSplitAction()
+        case (.compress(let preset), .pdf):
+            return PDFCompressAction(preset: preset)
         default:
             return nil
         }
