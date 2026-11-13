@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import Observation
 @testable import FinderWheelCore
 
 private struct StubAction: FileAction {
@@ -246,6 +247,29 @@ private struct StubAction: FileAction {
         #expect(fraction() == 0.45)
         jobs.applyProgress(id, fileIndex: 0, fraction: 1)
         #expect(fraction() == 1)
+        jobs.cancel(id)
+        await jobs.wait(id)
+    }
+}
+
+extension JobCenterTests {
+    @Test func droppedProgressReportsDoNotNotifyObservers() async {
+        let jobs = center { url, _ in
+            try await Task.sleep(for: .seconds(30))
+            return .produced([url])
+        }
+        let id = jobs.start(title: "Convert", inputs: files, kind: .convert(.jpg), settings: SettingsSnapshot())
+        jobs.applyProgress(id, fileIndex: 0, fraction: 0.4)
+
+        func notified(_ change: () -> Void) -> Bool {
+            var flag = false
+            withObservationTracking { _ = jobs.jobs } onChange: { flag = true }
+            change()
+            return flag
+        }
+        #expect(!notified { jobs.applyProgress(id, fileIndex: 1, fraction: 0.9) })
+        #expect(!notified { jobs.applyProgress(id, fileIndex: 0, fraction: 0.405) })
+        #expect(notified { jobs.applyProgress(id, fileIndex: 0, fraction: 0.6) })
         jobs.cancel(id)
         await jobs.wait(id)
     }

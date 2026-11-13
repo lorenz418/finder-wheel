@@ -42,6 +42,7 @@ enum AudioEncoder {
         guard writer.startWriting() else { throw ActionError("Could not encode audio") }
         writer.startSession(atSourceTime: .zero)
 
+        var lastReported = -1.0
         do {
             while let sample = readerOutput.copyNextSampleBuffer() {
                 try Task.checkCancellation()
@@ -50,7 +51,11 @@ enum AudioEncoder {
                 }
                 guard writerInput.append(sample) else { throw ActionError("Could not encode audio") }
                 if duration > 0 {
-                    progress(min(1, CMSampleBufferGetPresentationTimeStamp(sample).seconds / duration))
+                    let fraction = min(1, CMSampleBufferGetPresentationTimeStamp(sample).seconds / duration)
+                    if fraction - lastReported >= 0.01 || (fraction >= 1 && lastReported < 1) {
+                        lastReported = fraction
+                        progress(fraction)
+                    }
                 }
             }
         } catch {

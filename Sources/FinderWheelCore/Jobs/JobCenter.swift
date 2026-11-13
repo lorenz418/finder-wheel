@@ -148,11 +148,13 @@ public final class JobCenter {
     /// moved past are dropped, as are changes under 0.01 (except a final 1.0).
     func applyProgress(_ id: UUID, fileIndex: Int, fraction: Double) {
         let value = max(0, min(1, fraction))
-        update(id) { job in
-            guard job.done == fileIndex else { return }
-            guard value == 1 || abs(value - job.currentFraction) >= 0.01 else { return }
-            job.currentFraction = value
-        }
+        // Read first: assigning into `jobs` notifies observers even when nothing changes.
+        guard let index = jobs.firstIndex(where: { $0.id == id }),
+              jobs[index].state == .running,
+              jobs[index].done == fileIndex,
+              value == 1 ? jobs[index].currentFraction != 1 : abs(value - jobs[index].currentFraction) >= 0.01
+        else { return }
+        jobs[index].currentFraction = value
     }
 
     private func update(_ id: UUID, _ change: (inout Job) -> Void) {
