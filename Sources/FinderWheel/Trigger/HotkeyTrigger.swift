@@ -11,6 +11,9 @@ final class HotkeyTrigger {
     private var combo: HotkeyCombo
     private var mainRef: EventHotKeyRef?
     private var escapeRef: EventHotKeyRef?
+    private var escapeModRef: EventHotKeyRef?
+    private var polledDown = false
+    private var upTicks = 0
     private var handlerRef: EventHandlerRef?
     private var activationObserver: NSObjectProtocol?
     private(set) var isHeld = false
@@ -21,6 +24,14 @@ final class HotkeyTrigger {
 
     init(combo: HotkeyCombo) {
         self.combo = combo
+    }
+
+    deinit {
+        unregister(&mainRef)
+        unregister(&escapeRef)
+        unregister(&escapeModRef)
+        if let handlerRef { RemoveEventHandler(handlerRef) }
+        if let activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(activationObserver) }
     }
 
     func start() {
@@ -39,18 +50,29 @@ final class HotkeyTrigger {
     }
 
     func setEscapeEnabled(_ enabled: Bool) {
-        if enabled, escapeRef == nil {
-            escapeRef = register(keyCode: UInt32(kVK_Escape), modifiers: 0, id: Self.escapeID)
-        } else if !enabled {
+        if enabled {
+            if escapeRef == nil {
+                escapeRef = register(keyCode: UInt32(kVK_Escape), modifiers: 0, id: Self.escapeID)
+            }
+            // Carbon matches the exact modifier set, so Esc is also needed with the hotkey's modifiers held.
+            if escapeModRef == nil, combo.modifiers != 0 {
+                escapeModRef = register(keyCode: UInt32(kVK_Escape), modifiers: combo.modifiers, id: Self.escapeID)
+            }
+        } else {
             unregister(&escapeRef)
+            unregister(&escapeModRef)
         }
     }
 
     /// Fires `onRelease` if the hotkey's key is no longer physically down.
     func pollRelease() {
         guard isHeld else { return }
-        if !CGEventSource.keyState(.combinedSessionState, key: CGKeyCode(combo.keyCode)) {
-            handle(id: Self.mainID, pressed: false)
+        if CGEventSource.keyState(.combinedSessionState, key: CGKeyCode(combo.keyCode)) {
+            polledDown = true
+            upTicks = 0
+        } else if polledDown {
+            upTicks += 1
+            if upTicks >= 3 { handle(id: Self.mainID, pressed: false) }
         }
     }
 
@@ -103,6 +125,8 @@ final class HotkeyTrigger {
         case (Self.mainID, true):
             guard !isHeld else { return }
             isHeld = true
+            polledDown = false
+            upTicks = 0
             onPress?()
         case (Self.mainID, false):
             guard isHeld else { return }
