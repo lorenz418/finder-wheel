@@ -38,8 +38,8 @@ enum AudioEncoder {
         writerInput.expectsMediaDataInRealTime = false
         writer.add(writerInput)
 
-        guard reader.startReading() else { throw ActionError("Could not read audio") }
-        guard writer.startWriting() else { throw ActionError("Could not encode audio") }
+        guard reader.startReading() else { throw ActionError(failure("Could not read audio", reader.error)) }
+        guard writer.startWriting() else { throw ActionError(failure("Could not encode audio", writer.error)) }
         writer.startSession(atSourceTime: .zero)
 
         var lastReported = -1.0
@@ -49,7 +49,7 @@ enum AudioEncoder {
                 while !writerInput.isReadyForMoreMediaData {
                     try await Task.sleep(for: .milliseconds(5))
                 }
-                guard writerInput.append(sample) else { throw ActionError("Could not encode audio") }
+                guard writerInput.append(sample) else { throw ActionError(failure("Could not encode audio", writer.error)) }
                 if duration > 0 {
                     let fraction = min(1, CMSampleBufferGetPresentationTimeStamp(sample).seconds / duration)
                     if fraction - lastReported >= 0.01 || (fraction >= 1 && lastReported < 1) {
@@ -66,7 +66,12 @@ enum AudioEncoder {
         writerInput.markAsFinished()
         await writer.finishWriting()
         guard reader.status == .completed, writer.status == .completed else {
-            throw ActionError("Could not encode audio")
+            throw ActionError(failure("Could not encode audio", writer.error ?? reader.error))
         }
+    }
+
+    private static func failure(_ message: String, _ error: Error?) -> String {
+        guard let reason = error?.localizedDescription, !reason.isEmpty else { return message }
+        return "\(message): \(reason)"
     }
 }
