@@ -18,6 +18,8 @@ public enum ActionRouter {
             return PDFSplitAction()
         case (.compress(let preset), .pdf):
             return PDFCompressAction(preset: preset)
+        case (.markdown, .pdf), (.markdown, .image):
+            return MarkdownOCRAction()
         default:
             return nil
         }

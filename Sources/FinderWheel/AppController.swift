@@ -89,6 +89,26 @@ final class AppController {
         wheel.hide(commit: commit)
     }
 
+    /// For actions that upload to Mistral: makes sure a key exists and the user has
+    /// acknowledged the upload once. Returns false if the action must not start.
+    private func confirmMistralUpload() -> Bool {
+        guard settings.snapshot().mistralKey != nil else {
+            openSettings()
+            return false
+        }
+        let acknowledgedKey = "mistralUploadAcknowledged"
+        if UserDefaults.standard.bool(forKey: acknowledgedKey) { return true }
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Send files to Mistral?"
+        alert.informativeText = "Markdown for PDFs and images uploads the selected files to Mistral's OCR service. Every other Finder Wheel action stays on this Mac. This notice is shown once."
+        alert.addButton(withTitle: "Continue")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return false }
+        UserDefaults.standard.set(true, forKey: acknowledgedKey)
+        return true
+    }
+
     private func run(_ choice: WheelChoice) {
         let settings = settingsSnapshot()
         if choice.option.action == .combine {
@@ -100,6 +120,9 @@ final class AppController {
             }
             return
         }
+        let usesMistral = choice.option.action == .markdown
+            && [Classification.pdf, .image, .pdfImage].contains(choice.classification)
+        if usesMistral && !confirmMistralUpload() { return }
         let title = choice.entry.options.count > 1 ? "\(choice.entry.title): \(choice.option.title)" : choice.entry.title
         jobCenter.start(title: title, inputs: choice.inputs, kind: choice.option.action, settings: settings)
     }
