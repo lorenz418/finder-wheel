@@ -3,30 +3,16 @@ import FinderWheelCore
 
 @main
 struct FinderWheelApp: App {
-    private static let reader = FinderSelectionReader()
-
-    private static let trigger: HotkeyTrigger = {
-        let t = HotkeyTrigger(combo: .optionSpace)
-        t.onPress = {
-            do {
-                let urls = try reader.read()
-                let kinds = urls.map { Classifier.kind(of: $0) }
-                NSLog("FinderWheel: press, \(urls.count) items, classification \(Classifier.classify(kinds).rawValue)")
-            } catch {
-                NSLog("FinderWheel: selection error \(error)")
-            }
-            t.setEscapeEnabled(true)
-        }
-        t.onRelease = { NSLog("FinderWheel: release"); t.setEscapeEnabled(false) }
-        t.onEscape = { NSLog("FinderWheel: escape") }
-        return t
-    }()
-
-    init() { Self.trigger.start() }
+    @State private var controller = AppController()
 
     var body: some Scene {
-        MenuBarExtra("Finder Wheel", systemImage: "circle.dashed") {
-            Button("Quit Finder Wheel") { NSApplication.shared.terminate(nil) }
+        MenuBarExtra {
+            MenuBarView(controller: controller)
+        } label: {
+            let jobs = controller.jobCenter
+            Image(nsImage: StatusIcon.image(progress: jobs.isRunning ? jobs.overallProgress : nil,
+                                            warning: jobs.hasWarning || controller.permissionProblem != nil))
         }
+        .menuBarExtraStyle(.window)
     }
 }
