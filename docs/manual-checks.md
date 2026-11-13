@@ -63,3 +63,32 @@ Added after the code reviews of Plan 2 (hand checks deferred from Tasks 7 and 8)
 19. Settings: "Settings…" opens the window in front. Changing the hotkey to ⌃ Space makes ⌥Space stop working in Finder and ⌃Space work; change it back. A saved key survives quitting and relaunching (after a rebuild macOS may ask for your login password to read it).
 20. Turn off "Remove location data", convert a location-tagged photo: the result keeps its GPS data. Turn it back on.
 21. A PDF cropped in Preview (Tools > Crop) converts to images showing only the cropped area.
+
+## Plan 3: video, audio, transcription, polish
+
+Prepare: a screen recording (.mov) of 10 to 20 seconds with sound, an .mp4, a voice memo (.m4a), an .mp3 or .wav with speech, and a 1080p or larger video of a minute or more.
+
+1. Video wheel shows Markdown, Convert and Compress; the lower-left, upper-left and bottom wedges are dimmed. The centre reads "1 video".
+2. Convert (default MP4) on the .mov: `name.mp4` appears and plays in QuickTime with sound. On the .mp4: the menu lists "Already MP4".
+3. Convert, outer ring GIF: `name.gif` appears; it animates in Quick Look and is 480 px wide.
+4. Convert, outer ring M4A on the .mov: `name.m4a` plays the recording's sound.
+5. Compress, strong on the large video: the menu bar ring advances; `name-compressed.mp4` is clearly smaller and plays.
+6. Cancel a running video Compress from the menu: the job shows "Cancelled" and no `-compressed` file appears.
+7. Audio wheel on the .mp3: Convert offers only M4A and writes `name.m4a`. On the voice memo: "Already M4A".
+8. Audio Compress, strong on the voice memo: `name-compressed.m4a` is smaller, or the menu lists "Already as small as it gets".
+9. Select the .mov and the .mp3 together: the wheel shows Markdown, Convert (M4A only, no outer ring) and Compress. Compress writes an `.mp4` for the video and an `.m4a` for the audio.
+10. Markdown on the speech recording: `name.md` contains the spoken text in the language chosen in settings.
+11. Markdown on the screen recording with speech: `name.md` with the transcript.
+12. Markdown on a recording in a different language than the setting: change the language in settings, download its model if asked, and run again.
+13. Select a PDF and a video together: all wedges dimmed, "No actions for this selection".
+14. Start a long video Compress and immediately run an image Convert: both jobs appear in the menu and both finish.
+15. Markdown on a long recording, then Cancel in the menu: the job shows "Cancelled" and no .md file appears; during transcription the progress ring advances.
+16. Video to GIF on a 1-2 minute video: memory stays low (Activity Monitor) and the GIF's playback length matches the video.
+17. Settings, Transcription: the language list fills; while a model downloads the picker is disabled.
+18. Whether the app asks for speech-recognition permission at any point (report yes/no; if no, the NSSpeechRecognitionUsageDescription key can be removed).
+
+Also deferred from Task 7 (wheel polish): the wheel fades and scales in and fades out on release; the action starts at release; hold, release and hold again quickly keeps the wheel visible; the outer ring grows out of the targeted wedge; with Reduce motion on it only fades; re-run check 16 of the Plan 1 list (fast flick) and raise `ringOuter` and `outerRingOuter` by 10 in `WheelMetrics` if outer options are hit by accident.
+
+## Full regression
+
+Run the Plan 1 and Plan 2 lists again after Plan 3.
