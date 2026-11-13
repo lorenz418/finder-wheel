@@ -16,10 +16,19 @@ public struct ImageCompressAction: FileAction {
 
     public func run(input: URL, context: ActionContext) async throws -> ActionOutcome {
         let (source, sourceType) = try ImageIOHelper.source(for: input)
-        // JPG and HEIC keep their format; everything else becomes JPG.
-        let keepsFormat = sourceType.conforms(to: .jpeg) || sourceType.conforms(to: .heic)
+        // JPG, HEIC and HEIF keep their format; everything else becomes JPG.
+        let keepsFormat = sourceType.conforms(to: .jpeg) || sourceType.conforms(to: .heic) || sourceType.conforms(to: .heif)
         let type: UTType = keepsFormat ? sourceType : .jpeg
-        let ext = keepsFormat ? input.pathExtension : "jpg"
+        // The extension must match the content, so a JPEG named .png is not trusted by its name.
+        let ext: String
+        if !keepsFormat {
+            ext = "jpg"
+        } else if let nameType = UTType(filenameExtension: input.pathExtension), nameType.conforms(to: sourceType) {
+            ext = input.pathExtension
+        } else {
+            // UTType.jpeg prefers "jpeg"; this app names JPEGs ".jpg".
+            ext = sourceType.conforms(to: .jpeg) ? "jpg" : (sourceType.preferredFilenameExtension ?? "jpg")
+        }
         let output = OutputNamer.fileURL(for: input, suffix: "compressed", ext: ext)
         do {
             try AtomicOutput.write(to: output) { temp in

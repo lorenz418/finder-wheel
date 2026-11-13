@@ -1,6 +1,8 @@
 import Testing
 import Foundation
 import UniformTypeIdentifiers
+import CoreGraphics
+import ImageIO
 @testable import FinderWheelCore
 
 @Suite struct ImageCompressActionTests {
@@ -70,5 +72,45 @@ import UniformTypeIdentifiers
         let outcome = try await ImageCompressAction(preset: .light).run(input: input, context: context)
         #expect(outcome == .skipped("Already as small as it gets"))
         #expect(try FileManager.default.contentsOfDirectory(atPath: tmp.url.path) == ["tiny.jpg"])
+    }
+
+    @Test func jpegNamedPngKeepsJPEGExtension() async throws {
+        let tmp = TempFolder()
+        let input = Fixtures.writeNoiseImage(to: tmp.file("photo.png"), type: .jpeg)
+        let out = try output(try await ImageCompressAction(preset: .medium).run(input: input, context: context))
+        #expect(out.lastPathComponent == "photo-compressed.jpg")
+        #expect(Fixtures.imageType(out) == .jpeg)
+    }
+
+    /// RGBA bytes of the pixel at (x, y), counted from the top-left of the image.
+    private func pixel(_ url: URL, x: Int, y: Int) -> [UInt8] {
+        let source = CGImageSourceCreateWithURL(url as CFURL, nil)!
+        let image = CGImageSourceCreateImageAtIndex(source, 0, nil)!
+        var bytes = [UInt8](repeating: 0, count: 4)
+        let ctx = CGContext(data: &bytes, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                            space: CGColorSpaceCreateDeviceRGB(),
+                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.draw(image, in: CGRect(x: -x, y: -(image.height - 1 - y), width: image.width, height: image.height))
+        return bytes
+    }
+
+    @Test func transparentPNGBecomesJPGWithWhiteBackground() async throws {
+        let tmp = TempFolder()
+        // Noisy pixels (so the JPG is smaller than the PNG) with a transparent top-left quarter.
+        let noise = Fixtures.noiseImage(width: 1200, height: 800)
+        let ctx = CGContext(data: nil, width: 1200, height: 800, bitsPerComponent: 8, bytesPerRow: 0,
+                            space: CGColorSpaceCreateDeviceRGB(),
+                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.draw(noise, in: CGRect(x: 0, y: 0, width: 1200, height: 800))
+        ctx.clear(CGRect(x: 0, y: 400, width: 600, height: 400)) // CoreGraphics origin is bottom-left
+        let input = tmp.file("logo.png")
+        let dest = CGImageDestinationCreateWithURL(input as CFURL, UTType.png.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(dest, ctx.makeImage()!, nil)
+        #expect(CGImageDestinationFinalize(dest))
+        #expect(pixel(input, x: 0, y: 0)[3] == 0)
+        let out = try output(try await ImageCompressAction(preset: .medium).run(input: input, context: context))
+        #expect(out.lastPathComponent == "logo-compressed.jpg")
+        let rgba = pixel(out, x: 0, y: 0)
+        #expect(rgba[0] > 240 && rgba[1] > 240 && rgba[2] > 240)
     }
 }

@@ -9,6 +9,7 @@ public struct CutOutAction: FileAction {
         let handler = VNImageRequestHandler(url: input)
         let request = VNGenerateForegroundInstanceMaskRequest()
         try handler.perform([request])
+        try Task.checkCancellation()
         guard let observation = request.results?.first, !observation.allInstances.isEmpty else {
             throw ActionError("No subject found in this image")
         }
