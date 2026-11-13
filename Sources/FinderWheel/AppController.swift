@@ -27,7 +27,6 @@ final class AppController {
         trigger.onPress = { [weak self] in self?.hotkeyPressed() }
         trigger.onRelease = { [weak self] in self?.endWheel(commit: true) }
         trigger.onEscape = { [weak self] in self?.endWheel(commit: false) }
-        wheel.onTick = { [weak self] in self?.trigger.pollRelease() }
         // Deferred to the next run-loop turn so nothing started by a choice (a panel, an alert)
         // runs inside the hotkey's event handler.
         wheel.onChoice = { [weak self] choice in
@@ -105,11 +104,10 @@ final class AppController {
         alert.addButton(withTitle: "Continue")
         alert.addButton(withTitle: "Cancel")
         alert.window.level = .modalPanel
-        guard alert.runModal() == .alertFirstButtonReturn else {
-            // Give focus back to Finder so the hotkey works again immediately.
-            NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first?.activate()
-            return false
-        }
+        let proceed = alert.runModal() == .alertFirstButtonReturn
+        // Give focus back to Finder so the hotkey works again immediately.
+        NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first?.activate()
+        guard proceed else { return false }
         UserDefaults.standard.set(true, forKey: acknowledgedKey)
         return true
     }

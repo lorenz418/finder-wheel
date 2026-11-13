@@ -23,7 +23,7 @@ Prepare a folder with: two PNG screenshots, one HEIC or JPG photo taken with loc
 14. During a conversion of 20 or more images, the menu bar icon shows a progress ring; the menu lists the job with a Cancel button.
 15. Appearance: check the wheel over a light window, a dark window and the desktop picture, in light and dark mode. Labels stay readable.
 16. Flick quickly from the centre past the ring edge in the Convert direction. Note whether an outer-ring option is chosen by accident; if it happens often, raise `ringOuter` in `WheelMetrics` and re-run `swift test`.
-17. Slots that are not implemented yet (everything except image Convert) report "This action is not available for this file" in the menu. This is expected until Plans 2 and 3.
+17. Every wedge shown for a selection runs an action; none reports "This action is not available for this file".
 18. Select a file whose icon is close to a screen edge and hold ⌥Space with the cursor on it. Part of the wheel is off-screen. Note which wedges cannot be reached and report this to the user; do not move the wheel away from the cursor without asking, because the gesture depends on the wheel being centred on it.
 19. Hold on two images, slide straight out through Convert without curving: the outer-ring option straight ahead (PNG) is highlighted, not a border between two.
 
@@ -86,6 +86,7 @@ Prepare: a screen recording (.mov) of 10 to 20 seconds with sound, an .mp4, a vo
 16. Video to GIF on a 1-2 minute video: memory stays low (Activity Monitor) and the GIF's playback length matches the video.
 17. Settings, Transcription: the language list fills; while a model downloads the picker is disabled.
 18. Whether the app asks for speech-recognition permission at any point (report yes/no; if no, the NSSpeechRecognitionUsageDescription key can be removed).
+19. Hotkey robustness: with nothing selected, hold ⌥Space and release Option before Space, then select a file and hold ⌥Space: the wheel appears on the first try. Repeat pressing Esc while holding, releasing Option first. Afterwards ⌥Space in TextEdit types normally.
 
 Also deferred from Task 7 (wheel polish): the wheel fades and scales in and fades out on release; the action starts at release; hold, release and hold again quickly keeps the wheel visible; the outer ring grows out of the targeted wedge; with Reduce motion on it only fades; re-run check 16 of the Plan 1 list (fast flick) and raise `ringOuter` and `outerRingOuter` by 10 in `WheelMetrics` if outer options are hit by accident.
 

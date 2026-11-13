@@ -13,8 +13,6 @@ struct WheelChoice {
 @MainActor
 final class WheelController {
     var onChoice: ((WheelChoice) -> Void)?
-    /// Called on every cursor tick so the trigger can detect a missed key release.
-    var onTick: (() -> Void)?
 
     private let model = WheelModel()
     private lazy var panel = WheelPanel(model: model)
@@ -29,10 +27,13 @@ final class WheelController {
         self.lastUsed = lastUsed
     }
 
+    private var generation = 0
+
     var isShowing: Bool { timer != nil }
 
     func show(inputs: [URL], classification: Classification) {
         guard !isShowing else { return }
+        generation += 1
         self.inputs = inputs
         self.classification = classification
         let entries = WheelLayout.entries(for: classification, fileCount: inputs.count)
@@ -66,8 +67,9 @@ final class WheelController {
         timer = nil
         model.isVisible = false
         // Let the fade finish, unless the wheel was shown again in the meantime.
+        let shownGeneration = generation
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
-            guard let self, !self.isShowing else { return }
+            guard let self, self.generation == shownGeneration, !self.isShowing else { return }
             self.panel.orderOut(nil)
         }
         let hit = tracker?.hit ?? .none
@@ -98,7 +100,6 @@ final class WheelController {
         tracker.update(dx: location.x - origin.x, dy: location.y - origin.y)
         self.tracker = tracker
         if model.hit != tracker.hit { model.hit = tracker.hit }
-        onTick?()
     }
 
     private static func summary(count: Int, classification: Classification) -> String {

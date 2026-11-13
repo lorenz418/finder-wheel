@@ -2,7 +2,7 @@ import Foundation
 
 /// Maps what the user chose plus the kind of one file to the action that handles it.
 /// Returns nil when the combination has no implementation.
-/// Plans 2 and 3 add the remaining cases to this switch.
+/// Each case below pairs an action kind with the file kind it applies to; anything else falls through to nil.
 public enum ActionRouter {
     public static func action(for kind: ActionKind, fileKind: FileKind) -> FileAction? {
         switch (kind, fileKind) {
