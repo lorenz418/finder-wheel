@@ -155,7 +155,7 @@ Supporting pieces: the layout table (file type to verbs to sub-options, the sing
 ### Permissions
 
 - Automation permission for Finder is required.
-- The hold-hotkey is expected to work without Accessibility permission (system hotkey API for down/up, cursor position polling). The same check covers catching Esc while the hotkey is held and registering the hotkey only while Finder is frontmost. This must be verified in the first build step; if it does not hold, Accessibility permission is requested with an explanation.
+- Verified in Plan 1 (2026-11-12): the hold-hotkey (system hotkey API for down/up, cursor position polling), Esc while the hotkey is held, and registering the hotkey only while Finder is frontmost all work without Accessibility or Input Monitoring permission. The only prompt is the Finder automation prompt.
 
 ## Testing
 
