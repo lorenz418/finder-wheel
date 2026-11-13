@@ -113,4 +113,19 @@ import ImageIO
         let rgba = pixel(out, x: 0, y: 0)
         #expect(rgba[0] > 240 && rgba[1] > 240 && rgba[2] > 240)
     }
+
+    @Test func trueHEIFBecomesHEIC() async throws {
+        let tmp = TempFolder()
+        let input = Fixtures.writeNoiseImage(to: tmp.file("camera.hif"), type: .heic)
+        // Turn the HEIC brands (major brand and the last compatible brand) into generic HEIF
+        // brands, as camera .HIF files have: ftyp mif1, compatible mif1 MiHE miaf miaf.
+        var data = try Data(contentsOf: input)
+        data.replaceSubrange(8..<12, with: Data("mif1".utf8))
+        data.replaceSubrange(28..<32, with: Data("miaf".utf8))
+        try data.write(to: input)
+        #expect(Fixtures.imageType(input) == .heif)
+        let out = try output(try await ImageCompressAction(preset: .strong).run(input: input, context: context))
+        #expect(out.lastPathComponent == "camera-compressed.heic")
+        #expect(Fixtures.imageType(out) == .heic)
+    }
 }

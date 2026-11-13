@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import UniformTypeIdentifiers
 
 public struct ImageCompressAction: FileAction {
@@ -16,18 +17,23 @@ public struct ImageCompressAction: FileAction {
 
     public func run(input: URL, context: ActionContext) async throws -> ActionOutcome {
         let (source, sourceType) = try ImageIOHelper.source(for: input)
-        // JPG, HEIC and HEIF keep their format; everything else becomes JPG.
-        let keepsFormat = sourceType.conforms(to: .jpeg) || sourceType.conforms(to: .heic) || sourceType.conforms(to: .heif)
-        let type: UTType = keepsFormat ? sourceType : .jpeg
+        // JPEG and HEIC keep their format, HEIF is written as HEIC (ImageIO cannot write public.heif),
+        // and everything else becomes JPG. Only formats this Mac can write are kept.
+        let writable = (CGImageDestinationCopyTypeIdentifiers() as? [String]) ?? []
+        let isHEIF = sourceType.conforms(to: .heif) && !sourceType.conforms(to: .heic)
+        let target: UTType = isHEIF ? .heic : sourceType
+        let keepsFormat = (target.conforms(to: .jpeg) || target.conforms(to: .heic))
+            && writable.contains(target.identifier)
+        let type: UTType = keepsFormat ? target : .jpeg
         // The extension must match the content, so a JPEG named .png is not trusted by its name.
         let ext: String
         if !keepsFormat {
             ext = "jpg"
-        } else if let nameType = UTType(filenameExtension: input.pathExtension), nameType.conforms(to: sourceType) {
+        } else if let nameType = UTType(filenameExtension: input.pathExtension), nameType.conforms(to: target) {
             ext = input.pathExtension
         } else {
             // UTType.jpeg prefers "jpeg"; this app names JPEGs ".jpg".
-            ext = sourceType.conforms(to: .jpeg) ? "jpg" : (sourceType.preferredFilenameExtension ?? "jpg")
+            ext = target.conforms(to: .jpeg) ? "jpg" : (target.preferredFilenameExtension ?? "jpg")
         }
         let output = OutputNamer.fileURL(for: input, suffix: "compressed", ext: ext)
         do {
