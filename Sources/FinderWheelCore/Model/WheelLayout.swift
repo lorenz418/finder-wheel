@@ -5,8 +5,31 @@ public enum Slot: Int, CaseIterable, Sendable {
     case up = 0, upperRight, lowerRight, down, lowerLeft, upperLeft
 }
 
-public enum Verb: String, Sendable {
-    case markdown, convert, compress, extra, combine
+public enum Verb: String, CaseIterable, Codable, Sendable {
+    case markdown, convert, compress, split, cutOut, combine
+
+    public var title: String {
+        switch self {
+        case .markdown: return "Markdown"
+        case .convert: return "Convert"
+        case .compress: return "Compress"
+        case .split: return "Split"
+        case .cutOut: return "Cut out"
+        case .combine: return "Combine"
+        }
+    }
+
+    /// SF Symbol name.
+    public var symbol: String {
+        switch self {
+        case .markdown: return "text.document"
+        case .convert: return "arrow.left.arrow.right"
+        case .compress: return "arrow.down.right.and.arrow.up.left"
+        case .split: return "square.split.2x1"
+        case .cutOut: return "person.crop.rectangle"
+        case .combine: return "square.on.square"
+        }
+    }
 }
 
 public struct WheelOption: Equatable, Sendable {
@@ -27,65 +50,52 @@ public struct WheelEntry: Equatable, Sendable {
     public let remembersLastUsed: Bool
 }
 
-/// The single source of truth for what the wheel shows.
+/// Turns the user's wheel configurations into what the wheel shows for a selection.
 public enum WheelLayout {
-    public static func entries(for classification: Classification, fileCount: Int) -> [WheelEntry] {
+    public static func entries(for classification: Classification, fileCount: Int,
+                               configurations: WheelConfigurations = .standard) -> [WheelEntry] {
         switch classification {
-        case .pdf:
-            var list = [
-                markdown(),
-                convert([.png, .jpg], default: .png),
-                compress(resize: false),
-                single(.lowerLeft, .extra, "Split", "square.split.2x1", .splitPDF),
-            ]
-            if fileCount >= 2 { list.append(combine()) }
-            return list
-        case .image:
-            return [
-                markdown(),
-                convert([.jpg, .png, .heic, .tiff], default: .jpg),
-                compress(resize: true),
-                single(.lowerLeft, .extra, "Cut out", "person.crop.rectangle", .cutOut),
-                combine(),
-            ]
-        case .video:
-            return [markdown(), convert([.mp4, .gif, .m4a], default: .mp4), compress(resize: false)]
-        case .audio:
-            return [markdown(), convert([.m4a], default: .m4a), compress(resize: false)]
+        case .pdf, .image, .video, .audio:
+            guard let type = WheelFileType.allCases.first(where: { $0.classification == classification }) else { return [] }
+            let config = configurations[type].sanitized(for: type)
+            return Slot.allCases.compactMap { slot in
+                guard let slotConfig = config[slot] else { return nil }
+                // Combining a single PDF would only copy it.
+                if slotConfig.verb == .combine && classification == .pdf && fileCount < 2 { return nil }
+                return entry(slot, slotConfig, classification: classification, remembers: slotConfig.remembersLastUsed)
+            }
         case .videoAudio:
-            return [markdown(), convert([.m4a], default: .m4a, remembers: false), compress(resize: false, remembers: false)]
+            return mixed(classification, of: [.video, .audio], configurations: configurations)
         case .pdfImage:
-            return [markdown(), compress(resize: false, remembers: false), combine()]
+            return mixed(classification, of: [.pdf, .image], configurations: configurations)
         case .unsupported:
             return []
         }
     }
 
-    private static func single(_ slot: Slot, _ verb: Verb, _ title: String, _ symbol: String, _ action: ActionKind) -> WheelEntry {
-        WheelEntry(slot: slot, verb: verb, title: title, symbol: symbol,
-                   options: [WheelOption(id: verb.rawValue, title: title, action: action)],
-                   defaultOptionID: verb.rawValue, remembersLastUsed: false)
+    /// A mixed selection shows the actions every file supports and that are on the wheel of
+    /// every one of `types`: removing an action from one wheel removes it from the mix.
+    /// Placement, options and default follow the first type, as far as they apply.
+    /// Mixes never remember the last choice.
+    private static func mixed(_ classification: Classification, of types: [WheelFileType],
+                              configurations: WheelConfigurations) -> [WheelEntry] {
+        let configs = types.map { configurations[$0].sanitized(for: $0) }
+        let supported = WheelCatalog.verbs(for: classification)
+        return Slot.allCases.compactMap { slot in
+            guard let slotConfig = configs[0][slot], supported.contains(slotConfig.verb),
+                  configs.allSatisfy({ $0.slot(of: slotConfig.verb) != nil }) else { return nil }
+            return entry(slot, slotConfig, classification: classification, remembers: false)
+        }
     }
 
-    private static func markdown() -> WheelEntry {
-        single(.up, .markdown, "Markdown", "text.document", .markdown)
-    }
-
-    private static func combine() -> WheelEntry {
-        single(.upperLeft, .combine, "Combine", "square.on.square", .combine)
-    }
-
-    private static func convert(_ targets: [ConvertTarget], default def: ConvertTarget, remembers: Bool = true) -> WheelEntry {
-        WheelEntry(slot: .upperRight, verb: .convert, title: "Convert", symbol: "arrow.left.arrow.right",
-                   options: targets.map { WheelOption(id: $0.rawValue, title: $0.rawValue.uppercased(), action: .convert($0)) },
-                   defaultOptionID: def.rawValue, remembersLastUsed: remembers)
-    }
-
-    private static func compress(resize: Bool, remembers: Bool = true) -> WheelEntry {
-        var presets: [CompressPreset] = [.light, .medium, .strong]
-        if resize { presets.append(.resize) }
-        return WheelEntry(slot: .lowerRight, verb: .compress, title: "Compress", symbol: "arrow.down.right.and.arrow.up.left",
-                          options: presets.map { WheelOption(id: $0.rawValue, title: $0 == .resize ? "2000 px" : $0.rawValue.capitalized, action: .compress($0)) },
-                          defaultOptionID: CompressPreset.medium.rawValue, remembersLastUsed: remembers)
+    private static func entry(_ slot: Slot, _ config: SlotConfiguration, classification: Classification, remembers: Bool) -> WheelEntry {
+        let available = WheelCatalog.options(for: config.verb, classification: classification)
+        var options = config.optionIDs.compactMap { id in available.first { $0.id == id } }
+        if options.isEmpty { options = available }
+        let defaultID = options.contains { $0.id == config.defaultOptionID }
+            ? config.defaultOptionID
+            : options.first { $0.id == WheelCatalog.defaultOptionID(for: config.verb, classification: classification) }?.id ?? options[0].id
+        return WheelEntry(slot: slot, verb: config.verb, title: config.verb.title, symbol: config.verb.symbol,
+                          options: options, defaultOptionID: defaultID, remembersLastUsed: remembers && options.count > 1)
     }
 }

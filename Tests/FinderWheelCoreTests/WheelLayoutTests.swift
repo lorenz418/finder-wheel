@@ -16,7 +16,7 @@ import Testing
                 case .markdown: #expect(e.slot == .up)
                 case .convert: #expect(e.slot == .upperRight)
                 case .compress: #expect(e.slot == .lowerRight)
-                case .extra: #expect(e.slot == .lowerLeft)
+                case .split, .cutOut: #expect(e.slot == .lowerLeft)
                 case .combine: #expect(e.slot == .upperLeft)
                 }
             }
@@ -24,8 +24,8 @@ import Testing
     }
 
     @Test func verbsPerClassification() {
-        #expect(Set(verbs(.pdf).values) == [.markdown, .convert, .compress, .extra, .combine])
-        #expect(Set(verbs(.image).values) == [.markdown, .convert, .compress, .extra, .combine])
+        #expect(Set(verbs(.pdf).values) == [.markdown, .convert, .compress, .split, .combine])
+        #expect(Set(verbs(.image).values) == [.markdown, .convert, .compress, .cutOut, .combine])
         #expect(Set(verbs(.video).values) == [.markdown, .convert, .compress])
         #expect(Set(verbs(.audio).values) == [.markdown, .convert, .compress])
         #expect(Set(verbs(.videoAudio).values) == [.markdown, .convert, .compress])
@@ -67,8 +67,8 @@ import Testing
 
     @Test func optionsCarryActions() {
         #expect(entry(.image, .convert)?.options.first?.action == .convert(.jpg))
-        #expect(entry(.pdf, .extra)?.options.first?.action == .splitPDF)
-        #expect(entry(.image, .extra)?.options.first?.action == .cutOut)
+        #expect(entry(.pdf, .split)?.options.first?.action == .splitPDF)
+        #expect(entry(.image, .cutOut)?.options.first?.action == .cutOut)
         #expect(entry(.pdf, .combine)?.options.first?.action == .combine)
         #expect(entry(.video, .markdown)?.options.first?.action == .markdown)
         #expect(entry(.image, .compress)?.options.last?.action == .compress(.resize))

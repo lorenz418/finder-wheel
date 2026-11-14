@@ -31,12 +31,12 @@ final class WheelController {
 
     var isShowing: Bool { timer != nil }
 
-    func show(inputs: [URL], classification: Classification) {
+    func show(inputs: [URL], classification: Classification, configurations: WheelConfigurations) {
         guard !isShowing else { return }
         generation += 1
         self.inputs = inputs
         self.classification = classification
-        let entries = WheelLayout.entries(for: classification, fileCount: inputs.count)
+        let entries = WheelLayout.entries(for: classification, fileCount: inputs.count, configurations: configurations)
 
         model.entries = entries
         model.isUnsupported = entries.isEmpty
@@ -71,6 +71,8 @@ final class WheelController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
             guard let self, self.generation == shownGeneration, !self.isShowing else { return }
             self.panel.orderOut(nil)
+            // Otherwise the last outer ring would still be open, and close visibly, next time.
+            self.model.hit = .none
         }
         let hit = tracker?.hit ?? .none
         tracker = nil

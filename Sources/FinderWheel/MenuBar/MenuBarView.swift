@@ -3,6 +3,8 @@ import FinderWheelCore
 
 struct MenuBarView: View {
     let controller: AppController
+    @Environment(\.dismiss) private var dismiss
+    @State private var listHeight: CGFloat = 0
 
     var body: some View {
         let jobs = controller.jobCenter
@@ -20,18 +22,24 @@ struct MenuBarView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
+                // A scroll view has no height of its own here, so it gets the height of its
+                // content, up to a limit.
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         ForEach(jobs.jobs) { job in
                             JobRow(job: job) { jobs.cancel(job.id) }
                         }
                     }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listHeight = $0 }
                 }
-                .frame(maxHeight: 320)
+                .frame(height: min(max(listHeight, 1), 320))
             }
             Divider()
             HStack {
-                Button("Settings…") { controller.openSettings() }
+                Button("Settings…") {
+                    dismiss()
+                    controller.openSettings()
+                }
                 Spacer()
                 Button("Quit Finder Wheel") { NSApplication.shared.terminate(nil) }
             }

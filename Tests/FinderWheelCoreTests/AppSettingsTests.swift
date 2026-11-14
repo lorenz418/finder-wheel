@@ -56,4 +56,47 @@ import Foundation
         store.set("nonsense", forKey: "hotkeyID")
         #expect(AppSettings(defaults: store, secrets: InMemorySecretStore()).hotkey == .optionSpace)
     }
+
+    @Test func wheelDefaultsToTheStandardLayout() {
+        let settings = AppSettings(defaults: defaults(), secrets: InMemorySecretStore())
+        for type in WheelFileType.allCases {
+            #expect(settings.wheel[type] == .standard(for: type))
+        }
+    }
+
+    @Test func wheelPersistsPerType() {
+        let store = defaults()
+        let first = AppSettings(defaults: store, secrets: InMemorySecretStore())
+        first.wheel[.image].assign(.combine, to: .down, type: .image)
+        first.wheel[.image].setDefault("png", at: .upperRight)
+
+        let second = AppSettings(defaults: store, secrets: InMemorySecretStore())
+        #expect(second.wheel[.image] == first.wheel[.image])
+        #expect(second.wheel[.image][.down]?.verb == .combine)
+        #expect(second.wheel[.pdf] == .standard(for: .pdf))
+        #expect(store.data(forKey: "wheel.pdf") == nil)
+    }
+
+    @Test func aWheelBackAtItsDefaultsIsNotStored() {
+        let store = defaults()
+        let settings = AppSettings(defaults: store, secrets: InMemorySecretStore())
+        settings.wheel[.pdf].assign(nil, to: .up, type: .pdf)
+        #expect(store.data(forKey: "wheel.pdf") != nil)
+        settings.wheel[.pdf] = .standard(for: .pdf)
+        #expect(store.data(forKey: "wheel.pdf") == nil)
+    }
+
+    @Test func storedWheelIsSanitizedOnLoad() throws {
+        let store = defaults()
+        let broken = WheelConfiguration([.up: SlotConfiguration(verb: .cutOut, optionIDs: ["cutOut"], defaultOptionID: "cutOut",
+                                                                remembersLastUsed: false)])
+        store.set(try JSONEncoder().encode(broken), forKey: "wheel.video")
+        #expect(AppSettings(defaults: store, secrets: InMemorySecretStore()).wheel[.video][.up] == nil)
+    }
+
+    @Test func corruptStoredWheelFallsBackToStandard() {
+        let store = defaults()
+        store.set(Data("not json".utf8), forKey: "wheel.video")
+        #expect(AppSettings(defaults: store, secrets: InMemorySecretStore()).wheel[.video] == .standard(for: .video))
+    }
 }

@@ -15,7 +15,8 @@ final class AppController {
     @ObservationIgnored private let settingsWindow = SettingsWindowController()
     @ObservationIgnored private let trigger: HotkeyTrigger
     @ObservationIgnored private let reader = FinderSelectionReader()
-    @ObservationIgnored private let wheel = WheelController(lastUsed: LastUsedStore())
+    @ObservationIgnored private let lastUsed = LastUsedStore()
+    @ObservationIgnored private lazy var wheel = WheelController(lastUsed: lastUsed)
     @ObservationIgnored private let reorder = ReorderPanelController()
 
     init() {
@@ -44,8 +45,8 @@ final class AppController {
         settings.snapshot()
     }
 
-    func openSettings() {
-        settingsWindow.show(settings: settings)
+    func openSettings(tab: SettingsWindowController.Tab? = nil) {
+        settingsWindow.show(settings: settings, lastUsed: lastUsed, tab: tab)
     }
 
     /// Re-registers the hotkey whenever the setting changes.
@@ -79,7 +80,7 @@ final class AppController {
         guard !inputs.isEmpty else { return }
         let classification = Classifier.classify(inputs.map { Classifier.kind(of: $0) })
         guard trigger.isHeld else { return }
-        wheel.show(inputs: inputs, classification: classification)
+        wheel.show(inputs: inputs, classification: classification, configurations: settings.wheel)
         trigger.setEscapeEnabled(true)
     }
 
@@ -92,7 +93,7 @@ final class AppController {
     /// acknowledged the upload once. Returns false if the action must not start.
     private func confirmMistralUpload() -> Bool {
         guard settings.snapshot().mistralKey != nil else {
-            openSettings()
+            openSettings(tab: .services)
             return false
         }
         let acknowledgedKey = "mistralUploadAcknowledged"

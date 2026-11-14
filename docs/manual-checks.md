@@ -33,7 +33,7 @@ Added after the code reviews of Plan 1 (hand checks deferred from Tasks 9 and 10
 21. Release order: hold ⌥Space, release Option first and Space second; then the other way round. Each time the wheel closes once and acts once. Holding the keys for several seconds keeps the wheel open (no flicker).
 22. After the wheel closes, Esc works normally in Finder again (for example it cancels a rename).
 23. Hotkey conflicts: while renaming a file in Finder, ⌥Space opens the wheel instead of typing a non-breaking space. If you use more than one input source, note that ⌃Space (one of the alternative hotkeys) is the system shortcut for switching them. Decide whether the default hotkey suits you.
-24. Glass details: the six wedges read as separate segments with small gaps, not one fused ring. In the menu bar icon, the warning dot (shown after a failed job) is distinguishable, and it clears each time the menu is opened, not only the first time.
+24. Glass details: the wheel is one ring of smoked glass around a separate hub, with hairlines between the six directions; the highlighted direction is filled with the accent colour. In the menu bar icon, the warning dot (shown after a failed job) is distinguishable, and it clears each time the menu is opened, not only the first time.
 
 ## Plan 2: PDF, image and OCR actions
 
@@ -50,7 +50,7 @@ Prepare: a scanned or image-heavy PDF of several pages, a text-only PDF, a passw
 9. One PDF selected: the Combine wedge is dimmed. One image selected: Combine produces a one-page PDF.
 10. Combine three phone photos: strip appears sorted by name; Return writes `first-merged.pdf`. In Preview the pages are A4-sized (portrait or landscape to match each photo) and sharp when zoomed in.
 11. One PDF plus two images selected: the wheel shows only Markdown, Compress and Combine; Convert and the lower-left wedge are dimmed. Combine merges all three into one PDF. Compress writes a `-compressed` file for each.
-12. Remove the API key in settings. Markdown on a PDF: the settings window opens, shows "Add a key to use Markdown on PDFs and images.", and nothing is uploaded.
+12. Remove the API key in settings. Markdown on a PDF: the settings window opens, opens on the Services tab and shows "No key yet. Markdown for PDFs and images needs one.", and nothing is uploaded.
 13. Enter the key and click Save. Markdown on the scanned PDF: the one-time "Send files to Mistral?" notice appears in front of Finder; Cancel uploads nothing and ⌥Space works again straight away. Run again, Continue: `name.md` appears with the recognised text. Run once more: no notice.
 14. Markdown on the PNG screenshot and on a HEIC photo of a document: an `.md` file with the text for each.
 15. Enter a wrong key, run Markdown: the menu lists a Mistral error with the HTTP status; no file appears.
@@ -89,6 +89,22 @@ Prepare: a screen recording (.mov) of 10 to 20 seconds with sound, an .mp4, a vo
 19. Hotkey robustness: with nothing selected, hold ⌥Space and release Option before Space, then select a file and hold ⌥Space: the wheel appears on the first try. Repeat pressing Esc while holding, releasing Option first. Afterwards ⌥Space in TextEdit types normally.
 
 Also deferred from Task 7 (wheel polish): the wheel fades and scales in and fades out on release; the action starts at release; hold, release and hold again quickly keeps the wheel visible; the outer ring grows out of the targeted wedge; with Reduce motion on it only fades; re-run check 16 of the Plan 1 list (fast flick) and raise `ringOuter` and `outerRingOuter` by 10 in `WheelMetrics` if outer options are hit by accident.
+
+## Settings and customisation
+
+1. Settings has three tabs, General, Wheel and Services. Switching tabs changes only the window's height.
+2. Wheel tab: the preview looks like the real wheel. Clicking a direction selects it; hovering highlights it. PDF, Images, Video and Audio each show their own wheel.
+3. Select Convert on the Images wheel: the preview shows the outer ring with the default option marked. Untick TIFF: it leaves the preview and, in Finder, the real outer ring. The last ticked option cannot be unticked.
+4. Drag HEIC above JPG: the order changes in the list, the preview and the real wheel. The context menu's Move Up, Move Down and Make Default do the same as dragging and the "On release, run" menu.
+5. Drag Markdown onto the empty bottom direction: they swap, here and on the real wheel. Dragging a file or text onto the preview does nothing.
+6. Click an empty direction: the inspector lists the actions. Clicking one that is already on the wheel moves it here. "No Action" in the Action menu empties a direction; on the real wheel it is dimmed and does nothing.
+7. With "Remember last choice" on, pick HEIC from the real outer ring, then release on Convert: HEIC again. Change "On release, run" to PNG, or click "Reset Images Wheel": a plain release now runs what Settings shows. With the switch off, a plain release always runs the default.
+8. Remove Markdown from the PDF wheel only. One PDF plus one image selected: Markdown is not offered. Put it back: it is.
+9. Quit and reopen the app: the wheels are as you left them. "Reset … Wheel" restores the shipped layout and is disabled when nothing was changed.
+10. General: "Open at login" adds Finder Wheel under System Settings, General, Login Items, and turning it off removes it.
+11. Services: saving a key shows "Key saved in your Keychain" and a Remove button; typing a key and switching tabs keeps the unsaved text.
+12. Menu bar: clicking "Settings…" closes the menu. After a job, the menu lists it with its result; many jobs scroll.
+13. Check all three tabs in light and dark mode.
 
 ## Full regression
 

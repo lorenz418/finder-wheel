@@ -13,6 +13,12 @@ public struct WheelMetrics: Sendable {
 
     public init() {}
 
+    /// The direction whose wedge contains `degrees`, measured clockwise from up.
+    public static func slot(atDegrees degrees: Double) -> Slot {
+        let normalized = (degrees.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360)
+        return Slot(rawValue: Int((normalized + 30) / 60) % 6)!
+    }
+
     /// Centre angle in degrees (clockwise from up) of option `index` out of `count` for a slot.
     public func optionAngle(slot: Slot, index: Int, count: Int) -> Double {
         Double(slot.rawValue) * 60 + Double(index - (count - 1) / 2) * optionArc
@@ -49,7 +55,7 @@ public struct WheelTracker: Sendable {
         }
         var degrees = Double(atan2(dx, dy)) * 180 / .pi
         if degrees < 0 { degrees += 360 }
-        let angleSlot = Slot(rawValue: Int((degrees + 30) / 60) % 6)!
+        let angleSlot = WheelMetrics.slot(atDegrees: degrees)
 
         if radius < metrics.ringOuter {
             lockedSlot = nil

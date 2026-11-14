@@ -1,6 +1,6 @@
 import AppKit
 
-/// Draws the menu bar icon: a ring of six dots when idle, a progress arc while jobs run,
+/// Draws the menu bar icon: a ring of six segments when idle, a progress arc while jobs run,
 /// and a dot in the corner when a job reported a failure.
 enum StatusIcon {
     static func image(progress: Double?, warning: Bool) -> NSImage {
@@ -21,10 +21,13 @@ enum StatusIcon {
                 NSColor.black.setStroke()
                 arc.stroke()
             } else {
+                // The wheel: six segments, as in the app icon.
                 for i in 0..<6 {
-                    let angle = CGFloat(i) * .pi / 3
-                    let dot = NSRect(x: center.x + sin(angle) * 5.5 - 1.6, y: center.y + cos(angle) * 5.5 - 1.6, width: 3.2, height: 3.2)
-                    NSBezierPath(ovalIn: dot).fill()
+                    let middle = 90 - CGFloat(i) * 60
+                    let segment = NSBezierPath()
+                    segment.appendArc(withCenter: center, radius: 5.6, startAngle: middle + 19, endAngle: middle - 19, clockwise: true)
+                    segment.lineWidth = 3
+                    segment.stroke()
                 }
             }
             if warning {
