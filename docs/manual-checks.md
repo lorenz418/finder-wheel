@@ -90,6 +90,15 @@ Prepare: a screen recording (.mov) of 10 to 20 seconds with sound, an .mp4, a vo
 
 Also deferred from Task 7 (wheel polish): the wheel fades and scales in and fades out on release; the action starts at release; hold, release and hold again quickly keeps the wheel visible; the outer ring grows out of the targeted wedge; with Reduce motion on it only fades; re-run check 16 of the Plan 1 list (fast flick) and raise `ringOuter` and `outerRingOuter` by 10 in `WheelMetrics` if outer options are hit by accident.
 
+## Markdown with figures
+
+1. Markdown on a PDF with figures (charts, photos, diagrams): next to `name.md` a folder `name-assets` appears with one PNG per figure; both are selected in Finder. The PNGs are sharp when zoomed in, far sharper than a screenshot of the page, and show exactly the figure, not shifted or cut off.
+2. Open `name.md` in a Markdown viewer: every figure shows in its place. This also works when the PDF's name contains spaces.
+3. A PDF with a rotated page and a PDF cropped in Preview: the figures are still cut out at the right place.
+4. Markdown on a text-only PDF: only `name.md`, no folder.
+5. Run Markdown twice on the same PDF: the second run writes `name-2.md` and `name-2-assets`, and its links point into `name-2-assets`.
+6. Markdown on a photo of a page that contains a picture: `name-assets` holds the picture, cropped from the photo.
+
 ## Settings and customisation
 
 1. Settings has three tabs, General, Wheel and Services. Switching tabs changes only the window's height.

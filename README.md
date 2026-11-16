@@ -55,6 +55,8 @@ These are the defaults. Every direction can be changed.
 | Lower left | **Split** into pages | **Cut out** the subject | |
 | Upper left: **Combine** | Merge into one PDF | Into one PDF | |
 
+Markdown for a PDF also saves its figures: next to `report.md` you get a folder `report-assets` with every figure as a PNG, cut out of the original PDF at 600 DPI, and the Markdown links to them. For a photo or screenshot, figures are cropped from the original pixels.
+
 Convert to MP4 re-wraps the video without re-encoding when it is MP4-compatible (keeps HEVC and HDR, near-instant); otherwise it re-encodes.
 
 ## Make it yours
@@ -80,7 +82,6 @@ Files stay on your Mac. The one exception is the Markdown action on PDFs and ima
 - PDF Compress shrinks scanned and image-heavy PDFs; text-only PDFs are reported as "Already as small as it gets". It may lower the quality of already-low-resolution scans (like Preview's Reduce File Size).
 - Video Compress produces H.264 and converts HDR to SDR. For iPhone HEVC clips the light preset is often not smaller and is reported as "Already as small as it gets".
 - Video to GIF converts the whole video. Trim long videos first. Videos narrower than 480 px keep their width.
-- Markdown from Mistral keeps image references as plain links; the images themselves are not saved.
 - WebP and GIF cannot be written. GIF files are not accepted as input.
 - The wheel works in Finder only.
 

@@ -11,6 +11,22 @@ public enum OutputNamer {
         return unique(directory: input.deletingLastPathComponent(), stem: stem, ext: nil)
     }
 
+    /// A file and a folder that belong together, such as "name.md" and "name-assets".
+    /// Both get the same number, chosen so that neither exists yet.
+    public static func fileAndFolder(for input: URL, ext: String, folderSuffix: String) -> (file: URL, folder: URL) {
+        let directory = input.deletingLastPathComponent()
+        let stem = input.deletingPathExtension().lastPathComponent
+        func candidate(_ n: Int) -> (file: URL, folder: URL) {
+            let name = n == 1 ? stem : "\(stem)-\(n)"
+            return (directory.appendingPathComponent(name).appendingPathExtension(ext),
+                    directory.appendingPathComponent("\(name)-\(folderSuffix)", isDirectory: true))
+        }
+        var n = 1
+        while FileManager.default.fileExists(atPath: candidate(n).file.path)
+                || FileManager.default.fileExists(atPath: candidate(n).folder.path) { n += 1 }
+        return candidate(n)
+    }
+
     public static func pageFileName(base: String, index: Int, count: Int, ext: String) -> String {
         let width = max(2, String(count).count)
         let number = String(index + 1)

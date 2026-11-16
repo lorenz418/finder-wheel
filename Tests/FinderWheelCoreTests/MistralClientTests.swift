@@ -15,7 +15,7 @@ import Foundation
         #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
         let body = try json(request)
         #expect(body["model"] as? String == "mistral-ocr-latest")
-        #expect(body["include_image_base64"] as? Bool == false)
+        #expect(body["include_image_base64"] as? Bool == true)
         let document = body["document"] as? [String: String]
         #expect(document?["type"] == "document_url")
         #expect(document?["document_url"] == "data:application/pdf;base64,\(Data("pdf".utf8).base64EncodedString())")
@@ -38,7 +38,19 @@ import Foundation
     @Test func parsesPagesInIndexOrder() throws {
         // Two pound signs: the JSON contains `"#`, which would end a single-pound raw string.
         let body = ##"{"pages":[{"index":1,"markdown":"second"},{"index":0,"markdown":"# first"}]}"##
-        #expect(try MistralClient.parse(data: Data(body.utf8), status: 200) == "# first\n\nsecond\n")
+        #expect(try MistralClient.parse(data: Data(body.utf8), status: 200).map(\.markdown) == ["# first", "second"])
+    }
+
+    @Test func parsesImagesAndDimensions() throws {
+        let body = #"""
+        {"pages":[{"index":0,"markdown":"![img-0.jpeg](img-0.jpeg)",
+          "images":[{"id":"img-0.jpeg","top_left_x":10,"top_left_y":20,"bottom_right_x":110,"bottom_right_y":70,"image_base64":"data:image/jpeg;base64,QUJD"}],
+          "dimensions":{"dpi":200,"height":2200,"width":1700}}]}
+        """#
+        let page = try #require(try MistralClient.parse(data: Data(body.utf8), status: 200).first)
+        #expect(page.dimensions == .init(dpi: 200, width: 1700, height: 2200))
+        #expect(page.images == [.init(id: "img-0.jpeg", topLeftX: 10, topLeftY: 20, bottomRightX: 110, bottomRightY: 70,
+                                      imageBase64: "data:image/jpeg;base64,QUJD")])
     }
 
     @Test func emptyResultIsAnError() {
